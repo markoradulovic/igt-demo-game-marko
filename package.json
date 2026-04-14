@@ -1,0 +1,18 @@
+{
+  "name": "igt-demo-game-marko",
+  "version": "1.0.0",
+  "description": "Slot game demo — IGT candidate test",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pixi.js": "^8.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0"
+  }
+}
