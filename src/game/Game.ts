@@ -4,8 +4,17 @@ import { ReelBoard } from "./ReelBoard";
 import { BetSelector } from "./BetSelector";
 import { WinPresenter } from "./WinPresenter";
 
+// Minimum time reels visibly spin before we ask them to land. The server
+// resolves faster than the animation is entertaining; this floor enforces a
+// "felt" spin duration regardless of server latency.
 const MIN_SPIN_MS = 500;
 
+// Game state machine. `Game` is a thin orchestrator — it owns no outcome
+// math (that's `slotMath`) and no animation math (that's `ReelAnimator` and
+// `WinPresenter`). It sequences these states and wires modules together.
+//   IDLE → REQUESTING → SPINNING → STOPPING → PRESENTING_WIN → IDLE
+// Clicking Spin during PRESENTING_WIN interrupts the cycle and starts the
+// next spin (see `handleSpin`).
 type State = "IDLE" | "REQUESTING" | "SPINNING" | "STOPPING" | "PRESENTING_WIN";
 
 export class Game {
@@ -120,6 +129,9 @@ export class Game {
     this.setState("REQUESTING");
     this.board.spin();
     try {
+      // Kick off the request and the spin animation concurrently: reels
+      // start spinning immediately (REQUESTING), then transition to
+      // SPINNING once we have a response.
       const result = await this.server.spin(bet);
       if (!result.ok) {
         this.setState("IDLE");
@@ -164,6 +176,9 @@ export class Game {
     this.lastShownLine = null;
   }
 
+  // Pull state from `WinPresenter` each frame and reflect it to Pixi.
+  // `activeLine` changes discretely (once per LINE_MS), so we only repaint
+  // the board highlight when it actually changes — not every tick.
   private onPresenterTick(deltaMs: number): void {
     this.winPresenter.tick(deltaMs);
     if (!this.currentResponse) return;

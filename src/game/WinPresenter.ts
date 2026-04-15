@@ -1,5 +1,15 @@
 import type { SpinResponse, WinLine } from "../server/slotMath";
 
+// Pure timeline/state machine for win presentation. Deliberately has no Pixi
+// dependency — `Game` reads `rollupValue` / `activeLine` each tick and drives
+// rendering through `ReelBoard` and a total-win `Text`. Keeping the timing
+// logic here means it's unit-testable with deterministic tick sizes.
+//
+// Flow for a winning response:
+//   start() → rollupValue rolls 0 → totalWin over ROLLUP_MS
+//           → then activeLine cycles through response.lines, LINE_MS each,
+//             wrapping indefinitely until stop() is called
+// For a zero-win response, rollup stays 0 and activeLine stays null.
 export class WinPresenter {
   static readonly ROLLUP_MS = 800;
   static readonly LINE_MS = 900;

@@ -12,6 +12,10 @@ const SYMBOL_COLORS: Record<Symbol, number> = {
   WILD: 0xecf0f1,
 };
 
+// A purely cosmetic strip used while reels are spinning freely. The "real"
+// symbols only matter at the moment reels land — see `land()` below for how
+// we bake the server's grid into the strip at the target indices so the
+// final symbols are already scrolling in during deceleration.
 const BASE_STRIP: Symbol[] = ["A", "B", "C", "D", "E", "F", "WILD"];
 const STRIP_LEN = BASE_STRIP.length;
 
@@ -145,6 +149,11 @@ export class ReelBoard {
     this.stopTicking();
   }
 
+  // Highlight the cells that paid on `line`, dim the rest. The grid is passed
+  // in (rather than kept as state) so this stays stateless — `Game` owns the
+  // current response and decides when to call. Wild cells that substituted
+  // into a non-wild-paying line get a gold border instead of white, so the
+  // player can see _why_ the line paid.
   highlightLine(line: WinLine, grid: Symbol[][]): void {
     const winningSet = new Set(line.positions.map(([c, r]) => `${c},${r}`));
     for (let c = 0; c < COLS; c++) {

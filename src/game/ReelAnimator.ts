@@ -1,3 +1,10 @@
+// Per-reel tick-driven state machine. Pure TS (no Pixi) so it's unit-testable
+// by calling `tick(deltaMs)` directly with fixed step sizes.
+//   idle → accel → steady → decel → bounce → settled
+// `land(stop)` is the request to stop at a specific strip index; it doesn't
+// immediately decelerate — the reel finishes a minimum steady duration first,
+// then eases into the target stop, overshoots in `bounce`, and finally snaps
+// to the exact stop in `settled` so there's no float drift.
 type Phase = "idle" | "accel" | "steady" | "decel" | "bounce" | "settled";
 
 const ACCEL_MS = 200;
@@ -97,6 +104,10 @@ export class ReelAnimator {
     }
   }
 
+  // Pick the nearest future strip-position whose mod is `stop`, but ensure the
+  // reel travels at least MIN_DECEL_ROWS during deceleration. Without the
+  // minimum, a target that's already near the current position would cause an
+  // abrupt, non-tactile landing.
   private computeDecelEnd(current: number, stop: number): number {
     const base = Math.floor(current / this.stripLength) * this.stripLength;
     let end = base + stop;

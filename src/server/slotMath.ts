@@ -1,3 +1,8 @@
+// Port + adapter for the slot "server". `SlotServer` is the port — the only
+// surface `Game` imports. `MockedServer` is the v1 adapter and the only place
+// in the codebase that references reel strips, paytable, paylines, PRNG, or
+// wallet state. A real HTTP backend would be a drop-in replacement.
+
 export type Symbol = "A" | "B" | "C" | "D" | "E" | "F" | "WILD";
 
 export interface WinLine {
@@ -16,6 +21,9 @@ export interface SpinResponse {
   lines: WinLine[];
 }
 
+// Expected failures (insufficient funds) come through this Result channel
+// rather than a promise rejection. Rejection is reserved for truly exceptional
+// cases (network, bugs) so `Game` can treat them differently.
 export type SpinResult =
   | { ok: true; data: SpinResponse }
   | { ok: false; error: "INSUFFICIENT_FUNDS"; balance: number };
@@ -183,6 +191,8 @@ function evaluateLine(
   bet: number
 ): WinLine | null {
   const symbols = line.map(([reel, row]) => grid[reel][row]);
+  // Wild substitution: the paying symbol is the first non-wild on the line.
+  // A line of all wilds pays as WILD at its own (higher) rate.
   const firstNonWild = symbols.find((s) => s !== "WILD");
   const target: Symbol = firstNonWild ?? "WILD";
 
@@ -214,6 +224,8 @@ export class MockedServer implements SlotServer {
   }
 
   async spin(bet: number): Promise<SpinResult> {
+    // Defensive: `Game` already gates Spin at the UI level, but the server is
+    // the authority. Balance stays unchanged on this branch.
     if (bet > this.balance) {
       return { ok: false, error: "INSUFFICIENT_FUNDS", balance: this.balance };
     }

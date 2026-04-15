@@ -6,10 +6,11 @@
 
 Durable decisions that apply across all phases:
 
-- **Modules**: three deep modules + one thin orchestrator
+- **Modules**: four deep modules + one thin orchestrator
   - `src/server/slotMath.ts` — port `SlotServer` + `MockedServer` adapter; owns reel strips, paytable, paylines, PRNG, wallet/balance, line evaluation; colocates `SpinResponse`, `WinLine`, `Symbol` types
-  - `src/game/ReelBoard.ts` — 5×3 board; interface `spin()`, `requestStop()`, `land(response)`, `reset()`
+  - `src/game/ReelBoard.ts` — 5×3 board; interface `spin()`, `requestStop()`, `land(response)`, `highlightLine(line, grid)`, `clearHighlight()`. Internally composes `ReelAnimator` (per-reel tick-driven easing/bounce state machine, unit-tested separately)
   - `src/game/BetSelector.ts` — Pixi-rendered bet control; emits `betChanged`, exposes `setEnabled`
+  - `src/game/WinPresenter.ts` — pure-TS timeline state machine for win presentation: `start(response)`, `stop()`, `tick(deltaMs)`, getters `rollupValue`, `activeLine`, `isRollupComplete`. No Pixi dependency; `Game` reads state each tick and delegates rendering
   - `src/game/Game.ts` — thin orchestrator; receives `SlotServer` via constructor
   - `src/main.ts` — ~30-line bootstrap
 - **State machine**: `LOADING → IDLE → REQUESTING → SPINNING → STOPPING → PRESENTING_WIN → IDLE`; quick-stop transitions `SPINNING → STOPPING`

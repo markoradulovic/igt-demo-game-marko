@@ -2,9 +2,14 @@ import { Application, Container } from "pixi.js";
 import { MockedServer } from "./server/slotMath";
 import { Game } from "./game/Game";
 
+// Internal coordinate system. All gameplay code positions elements against a
+// fixed 1280×720 stage; `fitToViewport` applies a single uniform scale so the
+// game looks identical at any window size without per-element responsive math.
 const STAGE_W = 1280;
 const STAGE_H = 720;
 
+// `?seed=N` makes spin sequences reproducible — useful for demos, debugging,
+// and the invariant test suite. Without the param, we generate a random seed.
 function parseSeed(): number {
   const param = new URLSearchParams(window.location.search).get("seed");
   const parsed = param !== null ? Number(param) : NaN;

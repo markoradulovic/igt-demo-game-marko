@@ -133,7 +133,7 @@ Invariants (testable at the `slotMath` boundary):
 
 Organized around **deep modules**: small interfaces hiding large implementations, so tests target boundaries rather than internals and readers aren't forced to bounce between many shallow files.
 
-### Three deep modules + one thin orchestrator
+### Four deep modules + one thin orchestrator
 
 1. **`src/server/slotMath.ts` (port + adapter)**
    - Port: `interface SlotServer { spin(bet: number): Promise<SpinResult> }` where `SpinResult` is a discriminated union of `{ ok: true, data: SpinResponse }` and `{ ok: false, error: 'INSUFFICIENT_FUNDS', balance }`.
@@ -143,13 +143,17 @@ Organized around **deep modules**: small interfaces hiding large implementations
 
 2. **`src/game/ReelBoard.ts`**
    - One concept: the 5×3 board and what it shows.
-   - Interface: `spin(): void`, `requestStop(): void`, `land(response: SpinResponse): Promise<void>`, `reset(): void`.
-   - Hides sprite pool, per-reel easing/bounce, symbol strip scrolling, winning-symbol highlight cycling, and total-win roll-up. No separate `WinPresenter` — win presentation is part of the board's single lifecycle so the geometry/timing coupling stays internal.
+   - Interface: `spin(): void`, `requestStop(): void`, `land(response: SpinResponse): Promise<void>`, `highlightLine(line, grid): void`, `clearHighlight(): void`.
+   - Hides sprite pool, per-reel easing/bounce, symbol strip scrolling, and the geometry of applying a highlight/dim to specific cells (including a distinct marker for wild substitutions).
 
 3. **`src/game/BetSelector.ts`**
    - Pixi-rendered control (arrow buttons + bet label) over a fixed bet list. Emits `betChanged(newBet)`. Exposes `setEnabled(bool)` for disabling during spins.
 
-4. **`src/game/Game.ts` (thin orchestrator)**
+4. **`src/game/WinPresenter.ts`**
+   - Pure TypeScript (no Pixi) timeline/state machine for win presentation. Interface: `start(response)`, `stop()`, `tick(deltaMs)`, getters `rollupValue`, `activeLine`, `isRollupComplete`.
+   - Hides rollup easing and per-line cycling with indefinite wrap-around. Kept separate from `ReelBoard` so the timeline is unit-testable under deterministic `tick` drive and stays decoupled from rendering — `Game` reads state each Pixi tick and delegates rendering to `ReelBoard.highlightLine` / `clearHighlight` and a Pixi total-win `Text`.
+
+5. **`src/game/Game.ts` (thin orchestrator)**
    - Owns the state machine: `LOADING → IDLE → REQUESTING → SPINNING → STOPPING → PRESENTING_WIN → IDLE`.
    - `SPINNING` accepts a `quickStop` input that transitions directly to `STOPPING` via `ReelBoard.requestStop()`.
    - Receives `SlotServer` via constructor (ports & adapters), so tests and future real backends are drop-in.
@@ -168,8 +172,8 @@ Organized around **deep modules**: small interfaces hiding large implementations
 
 - **Brief-compliant**: "server logic separated from game, fetched via simple API call" is satisfied by the `SlotServer` port.
 - **Testable at the boundary**: fixed seed + bet → pinned response; response-invariant assertions cover everything the private helpers would otherwise need direct tests for.
-- **Fewer seams**: merging reels + win presentation removes a fragile coupling where a presenter would need to reach into reel geometry.
-- **Reviewer-navigable**: following a spin end-to-end means reading three files — `Game`, `ReelBoard`, `slotMath` — not eight.
+- **Clean seams**: `WinPresenter` owns _timing_ (rollup, line-cycle) while `ReelBoard` owns _geometry_ (which cell to dim/highlight). The presenter never reaches into reel layout — it exposes `activeLine` and `rollupValue`, and `Game` bridges. This keeps the timeline unit-testable without a Pixi harness.
+- **Reviewer-navigable**: following a spin end-to-end means reading four files — `Game`, `ReelBoard`, `WinPresenter`, `slotMath` — not eight.
 
 ## Tech Stack
 
@@ -215,8 +219,9 @@ A reviewer should be able to:
   - Invariants across many spins at a fixed seed: `grid` reconstructs from `stops` and strips; each `WinLine.positions` matches its `lineId` geometry; `sum(lines[].win) === totalWin`; `balanceAfter === previousBalance - bet + totalWin`.
   - Wild substitution: pinned spins that force a wild on a paying line, asserting the line still reports the non-wild symbol as `symbol`.
   - Insufficient-funds: calling `spin(bet)` when `bet > balance` resolves to `{ ok: false, error: 'INSUFFICIENT_FUNDS', balance }`; assert the discriminant, the reported `balance`, and that a subsequent `spin` at a valid bet still sees the unchanged balance.
-- **`ReelBoard`** — no unit tests. It's presentational; its correctness is visual and covered by manual acceptance.
-- **`BetSelector`** — no unit tests. Trivial UI; its behavior is observed by the reviewer.
+- **`ReelBoard`** — no unit tests for rendering. `ReelAnimator` (extracted easing/bounce state machine) has its own deterministic tick-driven tests.
+- **`WinPresenter`** — yes. Deterministic `tick`-driven tests cover the no-win skip, rollup 0→totalWin, post-rollup line cycling with wrap-around, and `stop()` reset.
+- **`BetSelector`** — has a small suite covering bet cycling and enable/disable behavior.
 - **`Game`** — no unit tests in v1. State-machine tests with a fake `SlotServer` are a natural next step and worth mentioning in interview as "this is where I'd add tests next."
 
 ### Prior art
@@ -226,7 +231,7 @@ A reviewer should be able to:
 ## Out of Scope (explicit, to avoid scope creep)
 
 - Audio, keyboard controls, anticipation effect, turbo toggle, free spins, scatter pays, bonus games, jackpots, settings menu, localization, accessibility audit, mobile touch tuning, real backend, analytics.
-- Unit tests for `ReelBoard`, `BetSelector`, or `Game` — deliberately deferred; discussed above.
+- Unit tests for `ReelBoard` rendering and `Game` — deliberately deferred; discussed above.
 - Performance benchmarking beyond "feels 60 FPS on reviewer's desktop."
 
 ## Further Notes
