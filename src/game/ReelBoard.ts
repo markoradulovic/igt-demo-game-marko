@@ -1,5 +1,5 @@
 import { Container, Graphics, Text, Ticker } from "pixi.js";
-import type { Symbol, SpinResponse } from "../server/slotMath";
+import type { Symbol, SpinResponse, WinLine } from "../server/slotMath";
 import { ReelAnimator } from "./ReelAnimator";
 
 const SYMBOL_COLORS: Record<Symbol, number> = {
@@ -26,6 +26,7 @@ const STAGGER_MS = 180;
 interface ReelCell {
   gfx: Graphics;
   label: Text;
+  highlight: Graphics;
 }
 
 interface Reel {
@@ -81,7 +82,11 @@ export class ReelBoard {
         label.x = CELL_W / 2;
         reelContainer.addChild(label);
 
-        cells.push({ gfx, label });
+        const highlight = new Graphics();
+        highlight.visible = false;
+        reelContainer.addChild(highlight);
+
+        cells.push({ gfx, label, highlight });
       }
 
       this.view.addChild(reelContainer);
@@ -138,6 +143,41 @@ export class ReelBoard {
       reel.settledApplied = true;
     }
     this.stopTicking();
+  }
+
+  highlightLine(line: WinLine, grid: Symbol[][]): void {
+    const winningSet = new Set(line.positions.map(([c, r]) => `${c},${r}`));
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        const cell = this.reels[c].cells[OVERSCAN + r];
+        const isWinning = winningSet.has(`${c},${r}`);
+        const alpha = isWinning ? 1 : 0.3;
+        cell.gfx.alpha = alpha;
+        cell.label.alpha = alpha;
+
+        cell.highlight.clear();
+        if (isWinning) {
+          const isWildSub = grid[c][r] === "WILD" && line.symbol !== "WILD";
+          const color = isWildSub ? 0xffd700 : 0xffffff;
+          cell.highlight.rect(0, 0, CELL_W, CELL_H);
+          cell.highlight.stroke({ width: 6, color });
+          cell.highlight.y = cell.gfx.y;
+          cell.highlight.visible = true;
+        } else {
+          cell.highlight.visible = false;
+        }
+      }
+    }
+  }
+
+  clearHighlight(): void {
+    for (const reel of this.reels) {
+      for (const cell of reel.cells) {
+        cell.gfx.alpha = 1;
+        cell.label.alpha = 1;
+        cell.highlight.visible = false;
+      }
+    }
   }
 
   private startTicking(): void {

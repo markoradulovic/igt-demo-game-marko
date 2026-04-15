@@ -118,12 +118,12 @@ On entering `PRESENTING_WIN`, `ReelBoard.land` runs a total-win roll-up counter,
 
 ### Acceptance criteria
 
-- [ ] After a winning spin, total-win value rolls up from 0 to `totalWin`
-- [ ] Each winning line is highlighted in turn with its own sub-win value visible
-- [ ] Non-winning symbols dim during line highlight; highlighted symbols stand out
-- [ ] Wild substitutions on winning lines are visibly marked
-- [ ] No-win spins skip the cycle and return to `IDLE` without visual noise
-- [ ] All prior tests still pass
+- [x] After a winning spin, total-win value rolls up from 0 to `totalWin`
+- [x] Each winning line is highlighted in turn with its own sub-win value visible
+- [x] Non-winning symbols dim during line highlight; highlighted symbols stand out
+- [x] Wild substitutions on winning lines are visibly marked
+- [x] No-win spins skip the cycle and return to `IDLE` without visual noise
+- [x] All prior tests still pass
 
 ---
 

@@ -1,11 +1,12 @@
-import { Container, Graphics, Text } from "pixi.js";
-import type { SlotServer } from "../server/slotMath";
+import { Container, Graphics, Text, Ticker } from "pixi.js";
+import type { SlotServer, SpinResponse, WinLine } from "../server/slotMath";
 import { ReelBoard } from "./ReelBoard";
 import { BetSelector } from "./BetSelector";
+import { WinPresenter } from "./WinPresenter";
 
 const MIN_SPIN_MS = 500;
 
-type State = "IDLE" | "REQUESTING" | "SPINNING" | "STOPPING";
+type State = "IDLE" | "REQUESTING" | "SPINNING" | "STOPPING" | "PRESENTING_WIN";
 
 export class Game {
   readonly view: Container;
@@ -18,11 +19,23 @@ export class Game {
   private spinButton: Container;
   private spinButtonBg: Graphics;
   private spinLabel: Text;
+  private winPresenter: WinPresenter;
+  private winLabel: Text;
+  private presenterTickHandler: ((t: Ticker) => void) | null = null;
+  private presenterTicker: Ticker;
+  private currentResponse: SpinResponse | null = null;
+  private lastShownLine: WinLine | null = null;
 
-  constructor(server: SlotServer, initialBalance: number) {
+  constructor(
+    server: SlotServer,
+    initialBalance: number,
+    ticker: Ticker = Ticker.shared
+  ) {
     this.server = server;
     this.balance = initialBalance;
+    this.presenterTicker = ticker;
     this.view = new Container();
+    this.winPresenter = new WinPresenter();
 
     this.board = new ReelBoard();
     this.board.view.x = 140;
@@ -36,6 +49,14 @@ export class Game {
     this.balanceLabel.x = 140;
     this.balanceLabel.y = 625;
     this.view.addChild(this.balanceLabel);
+
+    this.winLabel = new Text({
+      text: "",
+      style: { fill: 0xffd700, fontSize: 32, fontWeight: "bold" },
+    });
+    this.winLabel.x = 560;
+    this.winLabel.y = 625;
+    this.view.addChild(this.winLabel);
 
     this.betSelector = new BetSelector();
     this.betSelector.view.x = 140;
@@ -70,7 +91,8 @@ export class Game {
   }
 
   private canSpin(): boolean {
-    return this.state === "IDLE" && this.balance >= this.betSelector.bet;
+    const spinnable = this.state === "IDLE" || this.state === "PRESENTING_WIN";
+    return spinnable && this.balance >= this.betSelector.bet;
   }
 
   private refreshSpinButton(): void {
@@ -91,6 +113,9 @@ export class Game {
 
   private async handleSpin(): Promise<void> {
     if (!this.canSpin()) return;
+    if (this.state === "PRESENTING_WIN") {
+      this.stopPresenting();
+    }
     const bet = this.betSelector.bet;
     this.setState("REQUESTING");
     this.board.spin();
@@ -106,10 +131,51 @@ export class Game {
       await this.board.land(result.data);
       this.balance = result.data.balanceAfter;
       this.balanceLabel.text = this.formatBalance();
+      if (result.data.totalWin > 0) {
+        this.setState("PRESENTING_WIN");
+        this.startPresenting(result.data);
+      } else {
+        this.setState("IDLE");
+      }
     } catch (err) {
       console.error(err);
-    } finally {
       this.setState("IDLE");
+    }
+  }
+
+  private startPresenting(response: SpinResponse): void {
+    this.currentResponse = response;
+    this.lastShownLine = null;
+    this.winLabel.text = "Win: 0.00";
+    this.winPresenter.start(response);
+    this.presenterTickHandler = (t: Ticker) => this.onPresenterTick(t.deltaMS);
+    this.presenterTicker.add(this.presenterTickHandler);
+  }
+
+  private stopPresenting(): void {
+    if (this.presenterTickHandler) {
+      this.presenterTicker.remove(this.presenterTickHandler);
+      this.presenterTickHandler = null;
+    }
+    this.winPresenter.stop();
+    this.board.clearHighlight();
+    this.winLabel.text = "";
+    this.currentResponse = null;
+    this.lastShownLine = null;
+  }
+
+  private onPresenterTick(deltaMs: number): void {
+    this.winPresenter.tick(deltaMs);
+    if (!this.currentResponse) return;
+    this.winLabel.text = `Win: ${this.winPresenter.rollupValue.toFixed(2)}`;
+    const active = this.winPresenter.activeLine;
+    if (active !== this.lastShownLine) {
+      this.lastShownLine = active;
+      if (active) {
+        this.board.highlightLine(active, this.currentResponse.grid);
+      } else {
+        this.board.clearHighlight();
+      }
     }
   }
 
