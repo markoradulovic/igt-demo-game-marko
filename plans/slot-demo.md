@@ -81,11 +81,11 @@ End-to-end tracer bullet. `MockedServer` implements the `SlotServer` port with t
 
 ### Acceptance criteria
 
-- [ ] Spinning visibly accelerates, sustains, decelerates, and bounces
-- [ ] Reels stop staggered left-to-right, each landing on its server-returned stop
-- [ ] No console errors during 50+ consecutive spins
-- [ ] Frame rate stays smooth (no visible stutter on reviewer desktop)
-- [ ] Phase 1 invariant tests still pass unchanged
+- [x] Spinning visibly accelerates, sustains, decelerates, and bounces
+- [x] Reels stop staggered left-to-right, each landing on its server-returned stop
+- [x] No console errors during 50+ consecutive spins
+- [x] Frame rate stays smooth (no visible stutter on reviewer desktop)
+- [x] Phase 1 invariant tests still pass unchanged
 
 ---
 

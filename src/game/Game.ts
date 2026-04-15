@@ -3,12 +3,15 @@ import type { SlotServer } from "../server/slotMath";
 import { ReelBoard } from "./ReelBoard";
 
 const FIXED_BET = 1;
+const MIN_SPIN_MS = 500;
+
+type State = "IDLE" | "REQUESTING" | "SPINNING" | "STOPPING";
 
 export class Game {
   readonly view: Container;
   private board: ReelBoard;
   private server: SlotServer;
-  private busy = false;
+  private state: State = "IDLE";
 
   constructor(server: SlotServer) {
     this.server = server;
@@ -47,15 +50,27 @@ export class Game {
   }
 
   private async handleSpin(): Promise<void> {
-    if (this.busy) return;
-    this.busy = true;
+    if (this.state !== "IDLE") return;
+    this.state = "REQUESTING";
+    this.board.spin();
     try {
       const result = await this.server.spin(FIXED_BET);
-      if (result.ok) this.board.land(result.data);
+      if (!result.ok) {
+        this.state = "IDLE";
+        return;
+      }
+      this.state = "SPINNING";
+      await delay(MIN_SPIN_MS);
+      this.state = "STOPPING";
+      await this.board.land(result.data);
     } catch (err) {
       console.error(err);
     } finally {
-      this.busy = false;
+      this.state = "IDLE";
     }
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
