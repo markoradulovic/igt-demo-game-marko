@@ -99,12 +99,12 @@ End-to-end tracer bullet. `MockedServer` implements the `SlotServer` port with t
 
 ### Acceptance criteria
 
-- [ ] Bet selector cycles through all five bet values via on-canvas controls
-- [ ] Balance display updates after every spin to match `balanceAfter`
-- [ ] Spin is disabled and visually indicates so when balance < selected bet
-- [ ] When balance reaches 0, Spin stays disabled indefinitely (no reset UI); refreshing the page restores the session
-- [ ] Changing bet while `IDLE` works; bet control is disabled during `SPINNING`/`STOPPING`/`PRESENTING_WIN`
-- [ ] Server-wallet arithmetic invariant test (`balanceAfter === previousBalance - bet + totalWin`) still passes
+- [x] Bet selector cycles through all five bet values via on-canvas controls
+- [x] Balance display updates after every spin to match `balanceAfter`
+- [x] Spin is disabled and visually indicates so when balance < selected bet
+- [x] When balance reaches 0, Spin stays disabled indefinitely (no reset UI); refreshing the page restores the session
+- [x] Changing bet while `IDLE` works; bet control is disabled during `SPINNING`/`STOPPING`/`PRESENTING_WIN`
+- [x] Server-wallet arithmetic invariant test (`balanceAfter === previousBalance - bet + totalWin`) still passes
 
 ---
 

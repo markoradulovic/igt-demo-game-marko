@@ -39,8 +39,12 @@ async function init(): Promise<void> {
   const root = new Container();
   app.stage.addChild(root);
 
-  const server = new MockedServer({ seed: parseSeed(), startingBalance: 1000 });
-  const game = new Game(server);
+  const STARTING_BALANCE = 1000;
+  const server = new MockedServer({
+    seed: parseSeed(),
+    startingBalance: STARTING_BALANCE,
+  });
+  const game = new Game(server, STARTING_BALANCE);
   root.addChild(game.view);
 
   fitToViewport(app, root);
