@@ -13,9 +13,12 @@ Durable decisions that apply across all phases:
   - `src/game/Game.ts` — thin orchestrator; receives `SlotServer` via constructor
   - `src/main.ts` — ~30-line bootstrap
 - **State machine**: `LOADING → IDLE → REQUESTING → SPINNING → STOPPING → PRESENTING_WIN → IDLE`; quick-stop transitions `SPINNING → STOPPING`
-- **Ports & adapters**: `SlotServer` port with `getResponseData(bet: number): Promise<SpinResponse>`; `MockedServer` is the only adapter in v1
+- **Ports & adapters**: `SlotServer` port with `spin(bet: number): Promise<SpinResult>`; `MockedServer` is the only adapter in v1
 - **Response shape**:
   ```ts
+  type SpinResult =
+    | { ok: true; data: SpinResponse }
+    | { ok: false; error: "INSUFFICIENT_FUNDS"; balance: number };
   interface SpinResponse {
     stops: [number, number, number, number, number];
     grid: Symbol[][];
@@ -23,8 +26,14 @@ Durable decisions that apply across all phases:
     balanceAfter: number;
     lines: WinLine[];
   }
-  interface WinLine { lineId: number; symbol: Symbol; count: 3|4|5; positions: [number, number][]; win: number }
-  type Symbol = 'A'|'B'|'C'|'D'|'E'|'F'|'WILD';
+  interface WinLine {
+    lineId: number;
+    symbol: Symbol;
+    count: 3 | 4 | 5;
+    positions: [number, number][];
+    win: number;
+  }
+  type Symbol = "A" | "B" | "C" | "D" | "E" | "F" | "WILD";
   ```
 - **Game rules**: 5×3 grid, 5 fixed paylines (6 plain symbols + 1 Wild, left-to-right matching runs of 3/4/5):
   - Line 1 = top row `[(0,0),(1,0),(2,0),(3,0),(4,0)]`
@@ -32,7 +41,7 @@ Durable decisions that apply across all phases:
   - Line 3 = bottom row `[(0,2),(1,2),(2,2),(3,2),(4,2)]`
   - Line 4 = V-shape `[(0,0),(1,1),(2,2),(3,1),(4,0)]`
   - Line 5 = inverted-V `[(0,2),(1,1),(2,0),(3,1),(4,2)]`
-- **Error contract**: `getResponseData` throws on `bet > balance`; `Game` gates Spin at the UI level and never calls the server in that state. Any promise rejection transitions `REQUESTING → IDLE` with a `console.error`. No retry/toast in v1.
+- **Error contract**: `spin` returns `{ ok: false, error: 'INSUFFICIENT_FUNDS', balance }` when `bet > balance`; `Game` gates Spin at the UI level so this branch is defensive. Truly exceptional failures (network, bug) surface as promise rejection and transition `REQUESTING → IDLE` with a `console.error`. No retry/toast in v1.
 - **Zero-balance lifecycle**: Spin stays disabled when balance < smallest bet; page refresh resets session to `1000.00`. No in-game reset UI.
 - **Canvas**: internal coordinate system locked at 1280×720; fit-to-viewport uniform scaling via a single resize handler in `main.ts`
 - **PRNG**: Mulberry32 inside `MockedServer`; seed defaults to random, `?seed=N` URL param overrides
@@ -48,7 +57,7 @@ Durable decisions that apply across all phases:
 
 ### What to build
 
-End-to-end tracer bullet. `MockedServer` implements the `SlotServer` port with the seeded Mulberry32 PRNG, hand-authored reel strips, paytable, payline geometry, and line evaluator. Clicking a Spin button calls `slotMath.getResponseData(bet)` (fixed bet, no UI yet) and `ReelBoard` renders the returned grid as a static 5×3 display of placeholder colored rectangles keyed by symbol. No animation, no bet selector, no balance display, no win highlighting. `main.ts` parses `?seed=` from the URL, wires a fit-to-viewport resize handler, and constructs the modules. Vitest is introduced; a boundary suite pins response invariants (shape conformance, `grid`/`stops` reconstruction, `sum(lines[].win) === totalWin`, `balanceAfter` arithmetic, wild substitution reporting).
+End-to-end tracer bullet. `MockedServer` implements the `SlotServer` port with the seeded Mulberry32 PRNG, hand-authored reel strips, paytable, payline geometry, and line evaluator. Clicking a Spin button calls `slotMath.spin(bet)` (fixed bet, no UI yet) and `ReelBoard` renders the returned `data.grid` as a static 5×3 display of placeholder colored rectangles keyed by symbol. No animation, no bet selector, no balance display, no win highlighting. `main.ts` parses `?seed=` from the URL, wires a fit-to-viewport resize handler, and constructs the modules. Vitest is introduced; a boundary suite pins response invariants (shape conformance, `grid`/`stops` reconstruction, `sum(lines[].win) === totalWin`, `balanceAfter` arithmetic, wild substitution reporting).
 
 ### Acceptance criteria
 
@@ -58,7 +67,7 @@ End-to-end tracer bullet. `MockedServer` implements the `SlotServer` port with t
 - [ ] `npm run typecheck` and `npm run build` pass
 - [ ] `npm run test` passes with the seeded invariant suite green
 - [ ] `slotMath.ts` is the only file that imports or references reel strips, paytable, paylines, or PRNG
-- [ ] Calling `getResponseData` with a bet exceeding balance throws a typed error and leaves balance unchanged (covered by unit test)
+- [ ] Calling `spin` with a bet exceeding balance resolves to `{ ok: false, error: 'INSUFFICIENT_FUNDS', balance }` and leaves balance unchanged (covered by unit test)
 
 ---
 
