@@ -61,13 +61,13 @@ End-to-end tracer bullet. `MockedServer` implements the `SlotServer` port with t
 
 ### Acceptance criteria
 
-- [ ] Clicking Spin logs nothing to the console and updates the visible 5×3 grid to the server's returned symbols
-- [ ] `?seed=12345` produces the same grid sequence across reloads
-- [ ] Canvas scales uniformly to the window while preserving the 1280×720 coordinate system
-- [ ] `npm run typecheck` and `npm run build` pass
-- [ ] `npm run test` passes with the seeded invariant suite green
-- [ ] `slotMath.ts` is the only file that imports or references reel strips, paytable, paylines, or PRNG
-- [ ] Calling `spin` with a bet exceeding balance resolves to `{ ok: false, error: 'INSUFFICIENT_FUNDS', balance }` and leaves balance unchanged (covered by unit test)
+- [x] Clicking Spin logs nothing to the console and updates the visible 5×3 grid to the server's returned symbols
+- [x] `?seed=12345` produces the same grid sequence across reloads
+- [x] Canvas scales uniformly to the window while preserving the 1280×720 coordinate system
+- [x] `npm run typecheck` and `npm run build` pass
+- [x] `npm run test` passes with the seeded invariant suite green
+- [x] `slotMath.ts` is the only file that imports or references reel strips, paytable, paylines, or PRNG
+- [x] Calling `spin` with a bet exceeding balance resolves to `{ ok: false, error: 'INSUFFICIENT_FUNDS', balance }` and leaves balance unchanged (covered by unit test)
 
 ---
 
