@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#bb8fce"/>
+      <stop offset="100%" stop-color="#7d3c98"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="152" height="152" rx="18" fill="url(#bg)"/>
+  <!-- Lucky 7 -->
+  <text x="80" y="112" text-anchor="middle" font-family="Georgia,serif" font-size="88" font-weight="bold" font-style="italic" fill="#e8daef" stroke="#6c3483" stroke-width="2">7</text>
+  <text x="78" y="110" text-anchor="middle" font-family="Georgia,serif" font-size="88" font-weight="bold" font-style="italic" fill="#f4ecf7">7</text>
+</svg>

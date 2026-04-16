@@ -1,22 +1,20 @@
-import { Container, Graphics, Text, Ticker } from "pixi.js";
+import { Assets, Container, Graphics, Sprite, Ticker } from "pixi.js";
 import type { Symbol, SpinResponse, WinLine } from "../server/slotMath";
 import { ReelAnimator } from "./ReelAnimator";
-
-const SYMBOL_COLORS: Record<Symbol, number> = {
-  A: 0xe74c3c,
-  B: 0xe67e22,
-  C: 0xf1c40f,
-  D: 0x2ecc71,
-  E: 0x3498db,
-  F: 0x9b59b6,
-  WILD: 0xecf0f1,
-};
 
 // A purely cosmetic strip used while reels are spinning freely. The "real"
 // symbols only matter at the moment reels land — see `land()` below for how
 // we bake the server's grid into the strip at the target indices so the
 // final symbols are already scrolling in during deceleration.
-const BASE_STRIP: Symbol[] = ["A", "B", "C", "D", "E", "F", "WILD"];
+const BASE_STRIP: Symbol[] = [
+  "CHERRY",
+  "BELL",
+  "LEMON",
+  "EMERALD",
+  "DIAMOND",
+  "SEVEN",
+  "WILD",
+];
 const STRIP_LEN = BASE_STRIP.length;
 
 const CELL_W = 160;
@@ -28,8 +26,7 @@ const OVERSCAN = 1;
 const STAGGER_MS = 180;
 
 interface ReelCell {
-  gfx: Graphics;
-  label: Text;
+  sprite: Sprite;
   highlight: Graphics;
 }
 
@@ -51,14 +48,6 @@ export class ReelBoard {
     this.ticker = ticker;
     this.view = new Container();
 
-    const boardW = COLS * CELL_W + (COLS - 1) * REEL_GAP;
-    const boardH = ROWS * CELL_H;
-
-    const bg = new Graphics();
-    bg.rect(-16, -16, boardW + 32, boardH + 32);
-    bg.fill({ color: 0x0f0f1a });
-    this.view.addChild(bg);
-
     for (let c = 0; c < COLS; c++) {
       const reelContainer = new Container();
       reelContainer.x = c * (CELL_W + REEL_GAP);
@@ -73,24 +62,16 @@ export class ReelBoard {
       const cells: ReelCell[] = [];
       const totalCells = ROWS + OVERSCAN * 2;
       for (let i = 0; i < totalCells; i++) {
-        const gfx = new Graphics();
-        gfx.rect(0, 0, CELL_W, CELL_H);
-        gfx.fill({ color: 0x2a2a3e });
-        reelContainer.addChild(gfx);
-
-        const label = new Text({
-          text: "",
-          style: { fill: 0xffffff, fontSize: 48, fontWeight: "bold" },
-        });
-        label.anchor.set(0.5);
-        label.x = CELL_W / 2;
-        reelContainer.addChild(label);
+        const sprite = new Sprite();
+        sprite.width = CELL_W;
+        sprite.height = CELL_H;
+        reelContainer.addChild(sprite);
 
         const highlight = new Graphics();
         highlight.visible = false;
         reelContainer.addChild(highlight);
 
-        cells.push({ gfx, label, highlight });
+        cells.push({ sprite, highlight });
       }
 
       this.view.addChild(reelContainer);
@@ -103,7 +84,8 @@ export class ReelBoard {
         settledApplied: true,
       };
       this.reels.push(reel);
-      this.renderReel(reel, 0);
+      // Offset each reel so the idle grid shows a mix of symbols
+      this.renderReel(reel, c * 2);
     }
   }
 
@@ -183,9 +165,7 @@ export class ReelBoard {
       for (let r = 0; r < ROWS; r++) {
         const cell = this.reels[c].cells[OVERSCAN + r];
         const isWinning = winningSet.has(`${c},${r}`);
-        const alpha = isWinning ? 1 : 0.3;
-        cell.gfx.alpha = alpha;
-        cell.label.alpha = alpha;
+        cell.sprite.alpha = isWinning ? 1 : 0.3;
 
         cell.highlight.clear();
         if (isWinning) {
@@ -193,7 +173,7 @@ export class ReelBoard {
           const color = isWildSub ? 0xffd700 : 0xffffff;
           cell.highlight.rect(0, 0, CELL_W, CELL_H);
           cell.highlight.stroke({ width: 6, color });
-          cell.highlight.y = cell.gfx.y;
+          cell.highlight.y = cell.sprite.y;
           cell.highlight.visible = true;
         } else {
           cell.highlight.visible = false;
@@ -205,8 +185,7 @@ export class ReelBoard {
   clearHighlight(): void {
     for (const reel of this.reels) {
       for (const cell of reel.cells) {
-        cell.gfx.alpha = 1;
-        cell.label.alpha = 1;
+        cell.sprite.alpha = 1;
         cell.highlight.visible = false;
       }
     }
@@ -241,12 +220,15 @@ export class ReelBoard {
       const sym = reel.strip[stripIdx];
       const cell = reel.cells[i];
       const y = (visualRow - frac) * CELL_H;
-      cell.gfx.y = y;
-      cell.gfx.clear();
-      cell.gfx.rect(0, 0, CELL_W, CELL_H);
-      cell.gfx.fill({ color: SYMBOL_COLORS[sym] });
-      cell.label.text = sym;
-      cell.label.y = y + CELL_H / 2;
+      cell.sprite.y = y;
+      const texture = Assets.get(`symbol-${sym}`);
+      if (texture && cell.sprite.texture !== texture) {
+        cell.sprite.texture = texture;
+        // Pixi resets dimensions when the texture changes; re-apply the
+        // cell size so SVGs of varying native resolution all fill the cell.
+        cell.sprite.width = CELL_W;
+        cell.sprite.height = CELL_H;
+      }
     }
   }
 }

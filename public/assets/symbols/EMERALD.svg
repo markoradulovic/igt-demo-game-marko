@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#58d68d"/>
+      <stop offset="100%" stop-color="#1e8449"/>
+    </linearGradient>
+    <linearGradient id="gem" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#abebc6"/>
+      <stop offset="40%" stop-color="#2ecc71"/>
+      <stop offset="100%" stop-color="#1a9c5a"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="152" height="152" rx="18" fill="url(#bg)"/>
+  <!-- Emerald gem -->
+  <polygon points="80,28 116,56 108,120 52,120 44,56" fill="url(#gem)" stroke="#196f3d" stroke-width="2"/>
+  <polygon points="80,28 116,56 80,68 44,56" fill="#abebc6" opacity="0.4"/>
+  <line x1="80" y1="28" x2="80" y2="68" stroke="#196f3d" stroke-width="1.5" opacity="0.5"/>
+  <line x1="44" y1="56" x2="80" y2="68" stroke="#196f3d" stroke-width="1.5" opacity="0.5"/>
+  <line x1="116" y1="56" x2="80" y2="68" stroke="#196f3d" stroke-width="1.5" opacity="0.5"/>
+  <line x1="80" y1="68" x2="52" y2="120" stroke="#196f3d" stroke-width="1.5" opacity="0.5"/>
+  <line x1="80" y1="68" x2="108" y2="120" stroke="#196f3d" stroke-width="1.5" opacity="0.5"/>
+</svg>

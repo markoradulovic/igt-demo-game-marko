@@ -7,26 +7,29 @@ describe("BetSelector", () => {
     expect(b.bet).toBe(1.0);
   });
 
-  it("next() advances to the next bet in the fixed list [0.10, 0.50, 1.00, 2.00, 5.00]", () => {
+  it("next() advances to the next bet in the fixed list [1.00, 2.00, 5.00, 10.00]", () => {
     const b = new BetSelector();
     b.next();
     expect(b.bet).toBe(2.0);
     b.next();
     expect(b.bet).toBe(5.0);
+    b.next();
+    expect(b.bet).toBe(10.0);
   });
 
-  it("next() clamps at the maximum bet of 5.00", () => {
+  it("next() clamps at the maximum bet of 10.00", () => {
     const b = new BetSelector();
     for (let i = 0; i < 10; i++) b.next();
-    expect(b.bet).toBe(5.0);
+    expect(b.bet).toBe(10.0);
   });
 
-  it("prev() steps backwards and clamps at the minimum bet of 0.10", () => {
+  it("prev() clamps at the minimum bet of 1.00", () => {
     const b = new BetSelector();
-    b.prev();
-    expect(b.bet).toBe(0.5);
+    b.next(); // 2.0
+    b.prev(); // back to 1.0
+    expect(b.bet).toBe(1.0);
     for (let i = 0; i < 10; i++) b.prev();
-    expect(b.bet).toBe(0.1);
+    expect(b.bet).toBe(1.0);
   });
 
   it("fires betChanged with the new bet when the value changes", () => {
@@ -40,11 +43,9 @@ describe("BetSelector", () => {
 
   it("does not fire betChanged at the clamped endpoints", () => {
     const b = new BetSelector();
-    b.next();
-    b.next(); // at 5.0
     const seen: number[] = [];
     b.onBetChanged((v) => seen.push(v));
-    b.next();
+    b.prev(); // already at min
     expect(seen).toEqual([]);
   });
 

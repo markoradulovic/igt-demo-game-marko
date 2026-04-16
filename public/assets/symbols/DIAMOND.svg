@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5dade2"/>
+      <stop offset="100%" stop-color="#2471a3"/>
+    </linearGradient>
+    <linearGradient id="gem" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#aed6f1"/>
+      <stop offset="50%" stop-color="#3498db"/>
+      <stop offset="100%" stop-color="#1a5276"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="152" height="152" rx="18" fill="url(#bg)"/>
+  <!-- Diamond -->
+  <polygon points="80,24 120,60 80,136 40,60" fill="url(#gem)" stroke="#1a5276" stroke-width="2"/>
+  <polygon points="80,24 120,60 80,72 40,60" fill="#aed6f1" opacity="0.45"/>
+  <polygon points="80,24 96,60 80,72" fill="#d6eaf8" opacity="0.3"/>
+  <line x1="80" y1="24" x2="80" y2="72" stroke="#1a5276" stroke-width="1.5" opacity="0.4"/>
+  <line x1="40" y1="60" x2="80" y2="72" stroke="#1a5276" stroke-width="1.5" opacity="0.4"/>
+  <line x1="120" y1="60" x2="80" y2="72" stroke="#1a5276" stroke-width="1.5" opacity="0.4"/>
+  <line x1="80" y1="72" x2="80" y2="136" stroke="#1a5276" stroke-width="1" opacity="0.3"/>
+</svg>

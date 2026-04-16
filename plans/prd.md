@@ -56,7 +56,7 @@ A resolved, end-to-end spec for a Vite + TypeScript + PixiJS v8 slot demo, organ
 | Area                 | Decision                                                                                                                                                                                                                                                 |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Paylines             | **Fixed 5 lines** — 3 horizontal rows + 2 diagonals                                                                                                                                                                                                      |
-| Symbols              | **6 plain + 1 Wild** (Wild substitutes on lines; no scatter/free-spin)                                                                                                                                                                                   |
+| Symbols              | **6 plain + 1 Wild** — Cherry, Bell, Lemon, Emerald, Diamond, Seven, Wild (crown). Wild substitutes on lines; no scatter/free-spin                                                                                                                       |
 | Win presentation     | **Cycle-by-line**: total-win roll-up on entry, then loop through each winning line highlighting its symbols                                                                                                                                              |
 | Bet selector surface | **Pixi-rendered** (e.g. `<` / `>` arrows + bet label) — no DOM overlay                                                                                                                                                                                   |
 | Outcome generation   | **Strip-driven**: handcrafted reel strips, random stops, evaluate visible grid. Strips tuned wild-heavy for demo-friendly hit rate                                                                                                                       |
@@ -76,7 +76,7 @@ A resolved, end-to-end spec for a Vite + TypeScript + PixiJS v8 slot demo, organ
 
 ### Must-have (brief's "green" items + resolved scope)
 
-1. **Bet selector** — Pixi-rendered component cycling through `[0.10, 0.50, 1.00, 2.00, 5.00]`. Reusable component, emits `betChanged`.
+1. **Bet selector** — Pixi-rendered component cycling through `[1.00, 2.00, 5.00, 10.00]`. Reusable component, emits `betChanged`.
 2. **Reels (5×3)** — speed-up → steady → slow-down → bounce/overshoot on stop. Supports `requestStop()` during spin.
 3. **Mocked server module** — async `getResponseData(bet)` returning JSON; owns reel strips, paytable, paylines, RNG, wallet.
 4. **Win presentation** — total-win roll-up, then cycle-by-line highlighting of winning positions.
@@ -119,7 +119,14 @@ interface WinLine {
   positions: [number, number][]; // [reel, row] tuples, left-to-right
   win: number;
 }
-type Symbol = "A" | "B" | "C" | "D" | "E" | "F" | "WILD";
+type Symbol =
+  | "CHERRY"
+  | "BELL"
+  | "LEMON"
+  | "EMERALD"
+  | "DIAMOND"
+  | "SEVEN"
+  | "WILD";
 ```
 
 Invariants (testable at the `slotMath` boundary):
@@ -161,7 +168,7 @@ Organized around **deep modules**: small interfaces hiding large implementations
 
 ### Bootstrap
 
-`src/main.ts` is a ~30-line bootstrap that:
+`src/main.ts` is the bootstrap that:
 
 1. Parses `?seed=` from `location.search`.
 2. Creates the Pixi `Application` at 1280×720 and attaches a single resize handler that scales the stage to viewport.
@@ -186,7 +193,7 @@ Organized around **deep modules**: small interfaces hiding large implementations
 ## Assets
 
 - Source 7 free symbol sprites (6 plain + Wild) into `public/assets/symbols/`.
-- Provide one frame/background image into `public/assets/ui/`.
+- Provide frame and background images into `public/assets/ui/`.
 - Declare everything in a Pixi `Assets` manifest; load via the manifest before entering `IDLE`.
 
 ## Verification / Acceptance

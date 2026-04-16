@@ -1,4 +1,4 @@
-import { Container, Graphics, Text, Ticker } from "pixi.js";
+import { Assets, Container, Graphics, Sprite, Text, Ticker } from "pixi.js";
 import type { SlotServer, SpinResponse, WinLine } from "../server/slotMath";
 import { ReelBoard } from "./ReelBoard";
 import { BetSelector } from "./BetSelector";
@@ -47,6 +47,26 @@ export class Game {
     this.presenterTicker = ticker;
     this.view = new Container();
     this.winPresenter = new WinPresenter();
+
+    // Background fills the entire stage
+    const bgTexture = Assets.get("ui-background");
+    if (bgTexture) {
+      const bg = new Sprite(bgTexture);
+      bg.width = 1280;
+      bg.height = 720;
+      this.view.addChild(bg);
+    }
+
+    // Decorative frame behind the reel board
+    const frameTexture = Assets.get("ui-frame");
+    if (frameTexture) {
+      const frame = new Sprite(frameTexture);
+      frame.x = 110;
+      frame.y = 10;
+      frame.width = 892;
+      frame.height = 540;
+      this.view.addChild(frame);
+    }
 
     this.board = new ReelBoard();
     this.board.view.x = 140;

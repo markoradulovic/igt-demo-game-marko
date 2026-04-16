@@ -1,6 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 
-export const BET_LIST = [0.1, 0.5, 1.0, 2.0, 5.0] as const;
+export const BET_LIST = [1.0, 2.0, 5.0, 10.0] as const;
 
 type BetListener = (bet: number) => void;
 
@@ -10,7 +10,7 @@ const HEIGHT = 56;
 
 export class BetSelector {
   readonly view: Container;
-  private index = 2;
+  private index = 0;
   private enabled = true;
   private listeners: BetListener[] = [];
   private label: Text;

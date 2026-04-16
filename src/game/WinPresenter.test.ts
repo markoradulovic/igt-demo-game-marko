@@ -6,11 +6,11 @@ function makeResponse(partial: Partial<SpinResponse> = {}): SpinResponse {
   return {
     stops: [0, 0, 0, 0, 0],
     grid: [
-      ["A", "A", "A"],
-      ["A", "A", "A"],
-      ["A", "A", "A"],
-      ["A", "A", "A"],
-      ["A", "A", "A"],
+      ["CHERRY", "CHERRY", "CHERRY"],
+      ["CHERRY", "CHERRY", "CHERRY"],
+      ["CHERRY", "CHERRY", "CHERRY"],
+      ["CHERRY", "CHERRY", "CHERRY"],
+      ["CHERRY", "CHERRY", "CHERRY"],
     ],
     totalWin: 0,
     balanceAfter: 1000,
@@ -33,7 +33,7 @@ describe("WinPresenter", () => {
     const p = new WinPresenter();
     const win: WinLine = {
       lineId: 1,
-      symbol: "A",
+      symbol: "CHERRY",
       count: 3,
       positions: [
         [0, 0],
@@ -58,7 +58,7 @@ describe("WinPresenter", () => {
   it("cycles through lines after rollup completes, wrapping back to the first", () => {
     const l1: WinLine = {
       lineId: 1,
-      symbol: "A",
+      symbol: "CHERRY",
       count: 3,
       positions: [
         [0, 0],
@@ -69,7 +69,7 @@ describe("WinPresenter", () => {
     };
     const l2: WinLine = {
       lineId: 2,
-      symbol: "B",
+      symbol: "BELL",
       count: 3,
       positions: [
         [0, 1],
@@ -92,7 +92,7 @@ describe("WinPresenter", () => {
   it("stop() clears state: activeLine null and rollup zero", () => {
     const l: WinLine = {
       lineId: 1,
-      symbol: "A",
+      symbol: "CHERRY",
       count: 3,
       positions: [
         [0, 0],

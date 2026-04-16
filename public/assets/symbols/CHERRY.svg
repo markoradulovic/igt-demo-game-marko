@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff6b6b"/>
+      <stop offset="100%" stop-color="#c0392b"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="152" height="152" rx="18" fill="url(#bg)"/>
+  <!-- Cherry -->
+  <ellipse cx="68" cy="108" rx="26" ry="28" fill="#e74c3c" stroke="#a93226" stroke-width="2"/>
+  <ellipse cx="60" cy="98" rx="8" ry="6" fill="#ff9999" opacity="0.6"/>
+  <ellipse cx="104" cy="100" rx="22" ry="24" fill="#e74c3c" stroke="#a93226" stroke-width="2"/>
+  <ellipse cx="97" cy="92" rx="7" ry="5" fill="#ff9999" opacity="0.6"/>
+  <path d="M68 82 Q72 50 90 38" stroke="#2d5f2d" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M104 78 Q100 52 90 38" stroke="#2d5f2d" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <ellipse cx="96" cy="36" rx="16" ry="8" fill="#27ae60" transform="rotate(-30 96 36)"/>
+</svg>

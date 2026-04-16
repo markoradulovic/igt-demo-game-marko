@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f9e76c"/>
+      <stop offset="100%" stop-color="#d4ac0d"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="152" height="152" rx="18" fill="url(#bg)"/>
+  <!-- Lemon -->
+  <ellipse cx="80" cy="84" rx="40" ry="36" fill="#f7dc6f" stroke="#d4ac0d" stroke-width="2" transform="rotate(-20 80 84)"/>
+  <ellipse cx="72" cy="76" rx="14" ry="10" fill="#fef9e7" opacity="0.5" transform="rotate(-20 72 76)"/>
+  <path d="M108 60 Q116 52 112 44" stroke="#27ae60" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <ellipse cx="116" cy="42" rx="10" ry="5" fill="#27ae60" transform="rotate(-40 116 42)"/>
+</svg>

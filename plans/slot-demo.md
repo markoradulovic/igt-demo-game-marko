@@ -12,7 +12,7 @@ Durable decisions that apply across all phases:
   - `src/game/BetSelector.ts` — Pixi-rendered bet control; emits `betChanged`, exposes `setEnabled`
   - `src/game/WinPresenter.ts` — pure-TS timeline state machine for win presentation: `start(response)`, `stop()`, `tick(deltaMs)`, getters `rollupValue`, `activeLine`, `isRollupComplete`. No Pixi dependency; `Game` reads state each tick and delegates rendering
   - `src/game/Game.ts` — thin orchestrator; receives `SlotServer` via constructor
-  - `src/main.ts` — ~30-line bootstrap
+  - `src/main.ts` — bootstrap: asset preload with animated loading bar, then game construction
 - **State machine**: `LOADING → IDLE → REQUESTING → SPINNING → STOPPING → PRESENTING_WIN → IDLE`; quick-stop transitions `SPINNING → STOPPING`
 - **Ports & adapters**: `SlotServer` port with `spin(bet: number): Promise<SpinResult>`; `MockedServer` is the only adapter in v1
 - **Response shape**:
@@ -34,7 +34,14 @@ Durable decisions that apply across all phases:
     positions: [number, number][];
     win: number;
   }
-  type Symbol = "A" | "B" | "C" | "D" | "E" | "F" | "WILD";
+  type Symbol =
+    | "CHERRY"
+    | "BELL"
+    | "LEMON"
+    | "EMERALD"
+    | "DIAMOND"
+    | "SEVEN"
+    | "WILD";
   ```
 - **Game rules**: 5×3 grid, 5 fixed paylines (6 plain symbols + 1 Wild, left-to-right matching runs of 3/4/5):
   - Line 1 = top row `[(0,0),(1,0),(2,0),(3,0),(4,0)]`
@@ -46,7 +53,7 @@ Durable decisions that apply across all phases:
 - **Zero-balance lifecycle**: Spin stays disabled when balance < smallest bet; page refresh resets session to `1000.00`. No in-game reset UI.
 - **Canvas**: internal coordinate system locked at 1280×720; fit-to-viewport uniform scaling via a single resize handler in `main.ts`
 - **PRNG**: Mulberry32 inside `MockedServer`; seed defaults to random, `?seed=N` URL param overrides
-- **Bet list**: `[0.10, 0.50, 1.00, 2.00, 5.00]`; starting balance `1000.00`
+- **Bet list**: `[1.00, 2.00, 5.00, 10.00]`; starting balance `1000.00`
 - **Tech stack**: TypeScript strict, PixiJS v8, Vite, Vitest (dev)
 - **Assets root**: `public/assets/symbols/`, `public/assets/ui/`, declared in a Pixi `Assets` manifest
 
@@ -156,9 +163,9 @@ Source 6 plain symbol sprites + 1 Wild sprite + a frame/background image into `p
 
 ### Acceptance criteria
 
-- [ ] Reloading the page shows a visible loading bar that fills to 100% before the game appears
-- [ ] All symbols render as sourced sprites, not colored rectangles
-- [ ] Loading completes in under 2s on reviewer desktop with warm cache
-- [ ] No console errors during preload, including the cold-cache first load
-- [ ] `npm run build` output still succeeds and the dist bundle plays identically to `npm run dev`
-- [ ] All prior tests still pass
+- [x] Reloading the page shows a visible loading bar that fills to 100% before the game appears
+- [x] All symbols render as sourced sprites, not colored rectangles
+- [x] Loading completes in under 2s on reviewer desktop with warm cache
+- [x] No console errors during preload, including the cold-cache first load
+- [x] `npm run build` output still succeeds and the dist bundle plays identically to `npm run dev`
+- [x] All prior tests still pass
