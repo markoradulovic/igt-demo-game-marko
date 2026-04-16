@@ -15,6 +15,12 @@ const BOUNCE_MS = 150;
 const BOUNCE_OVERSHOOT = 0.4; // rows
 const MIN_DECEL_ROWS = 3;
 
+// Quick-stop uses compressed timings so all reels settle within ~180ms
+// (vs ~450ms normal). The bounce is kept to preserve tactile feel even
+// when slamming — without it the snap looks broken rather than intentional.
+const QUICK_DECEL_MS = 100;
+const QUICK_BOUNCE_MS = 80;
+
 export class ReelAnimator {
   private phase: Phase = "idle";
   private _pos = 0;
@@ -24,6 +30,8 @@ export class ReelAnimator {
   private targetStop = 0;
   private decelStart = 0;
   private decelEnd = 0;
+  private decelMs = DECEL_MS;
+  private bounceMs = BOUNCE_MS;
 
   constructor(private readonly stripLength: number) {}
 
@@ -41,6 +49,8 @@ export class ReelAnimator {
     this.phaseElapsed = 0;
     this.steadyElapsed = 0;
     this.landedAtElapsed = null;
+    this.decelMs = DECEL_MS;
+    this.bounceMs = BOUNCE_MS;
   }
 
   land(stop: number): void {
@@ -48,6 +58,28 @@ export class ReelAnimator {
     if (this.landedAtElapsed === null) {
       this.landedAtElapsed = this.steadyElapsed;
     }
+  }
+
+  // Immediately begin a compressed decel→bounce→settled to the target stop.
+  // Called when the player clicks Spin mid-animation ("quick-stop"). No-op if
+  // the reel is already decelerating or settled — this makes double-tapping
+  // harmless and means `Game` doesn't need to guard against redundant calls.
+  quickStop(stop: number): void {
+    if (
+      this.phase === "decel" ||
+      this.phase === "bounce" ||
+      this.phase === "settled" ||
+      this.phase === "idle"
+    ) {
+      return;
+    }
+    this.targetStop = stop;
+    this.decelMs = QUICK_DECEL_MS;
+    this.bounceMs = QUICK_BOUNCE_MS;
+    this.decelStart = this._pos;
+    this.decelEnd = this.computeDecelEnd(this._pos, stop);
+    this.phase = "decel";
+    this.phaseElapsed = 0;
   }
 
   tick(deltaMs: number): void {
@@ -82,7 +114,7 @@ export class ReelAnimator {
     }
 
     if (this.phase === "decel") {
-      const t = Math.min(1, this.phaseElapsed / DECEL_MS);
+      const t = Math.min(1, this.phaseElapsed / this.decelMs);
       const eased = 1 - Math.pow(1 - t, 3);
       this._pos = this.decelStart + (this.decelEnd - this.decelStart) * eased;
       if (t >= 1) {
@@ -94,7 +126,7 @@ export class ReelAnimator {
     }
 
     if (this.phase === "bounce") {
-      const t = Math.min(1, this.phaseElapsed / BOUNCE_MS);
+      const t = Math.min(1, this.phaseElapsed / this.bounceMs);
       const offset = Math.sin(t * Math.PI) * BOUNCE_OVERSHOOT;
       this._pos = this.decelEnd + offset;
       if (t >= 1) {

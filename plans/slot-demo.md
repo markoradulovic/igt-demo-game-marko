@@ -104,7 +104,7 @@ End-to-end tracer bullet. `MockedServer` implements the `SlotServer` port with t
 - [x] Balance display updates after every spin to match `balanceAfter`
 - [x] Spin is disabled and visually indicates so when balance < selected bet
 - [x] When balance reaches 0, Spin stays disabled indefinitely (no reset UI); refreshing the page restores the session
-- [x] Changing bet while `IDLE` works; bet control is disabled during `SPINNING`/`STOPPING`/`PRESENTING_WIN`
+- [x] Changing bet while `IDLE` or `PRESENTING_WIN` works; bet control is disabled during `SPINNING`/`STOPPING`
 - [x] Server-wallet arithmetic invariant test (`balanceAfter === previousBalance - bet + totalWin`) still passes
 
 ---
@@ -138,11 +138,11 @@ On entering `PRESENTING_WIN`, `ReelBoard.land` runs a total-win roll-up counter,
 
 ### Acceptance criteria
 
-- [ ] Clicking Spin during an active spin lands all reels within ~300ms
-- [ ] Quick-stopped reels still land on the server's `stops` (no drift)
-- [ ] Quick-stopping during `STOPPING` is a no-op (doesn't double-trigger)
-- [ ] Quick-stop during `PRESENTING_WIN` starts the next spin as normal
-- [ ] All prior tests still pass
+- [x] Clicking Spin during an active spin lands all reels within ~300ms
+- [x] Quick-stopped reels still land on the server's `stops` (no drift)
+- [x] Quick-stopping during `STOPPING` is a no-op (doesn't double-trigger)
+- [x] Quick-stop during `PRESENTING_WIN` starts the next spin as normal
+- [x] All prior tests still pass
 
 ---
 

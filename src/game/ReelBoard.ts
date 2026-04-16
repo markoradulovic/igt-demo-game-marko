@@ -116,6 +116,25 @@ export class ReelBoard {
     this.startTicking();
   }
 
+  // Quick-stop: all reels snap to their server-returned stops simultaneously.
+  // Unlike `land()` which staggers left-to-right for a natural cascade,
+  // quick-stop fires every reel at once — the player asked to skip the show.
+  // The response is passed here (not stored earlier) because during normal
+  // flow `land()` hasn't been called yet when the player quick-stops; the
+  // server response was sitting in `Game` waiting for MIN_SPIN_MS to elapse.
+  requestStop(response: SpinResponse): void {
+    for (let c = 0; c < COLS; c++) {
+      const reel = this.reels[c];
+      const targetPos = response.stops[c] % STRIP_LEN;
+      for (let r = 0; r < ROWS; r++) {
+        reel.strip[(targetPos + r) % STRIP_LEN] = response.grid[c][r];
+      }
+      reel.settledApplied = false;
+      reel.animator.quickStop(targetPos);
+    }
+    this.startTicking();
+  }
+
   async land(response: SpinResponse): Promise<void> {
     for (let c = 0; c < COLS; c++) {
       const reel = this.reels[c];
@@ -134,6 +153,10 @@ export class ReelBoard {
       }
     }
 
+    await this.waitForSettle();
+  }
+
+  async waitForSettle(): Promise<void> {
     await new Promise<void>((resolve) => {
       const interval = setInterval(() => {
         if (this.reels.every((r) => r.animator.isSettled)) {

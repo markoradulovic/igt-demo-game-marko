@@ -100,4 +100,71 @@ describe("ReelAnimator", () => {
     tickUntil(a, () => a.isSettled);
     expect(a.isSettled).toBe(true);
   });
+
+  describe("quickStop", () => {
+    it("settles on the exact target stop when called during steady phase", () => {
+      const a = new ReelAnimator(15);
+      a.start();
+      // Advance into steady phase
+      for (let i = 0; i < 30; i++) a.tick(16);
+      a.quickStop(7);
+      tickUntil(a, () => a.isSettled);
+      expect(a.isSettled).toBe(true);
+      expect(a.position).toBe(7);
+    });
+
+    it("settles faster than a normal land()", () => {
+      const normal = new ReelAnimator(15);
+      normal.start();
+      for (let i = 0; i < 30; i++) normal.tick(16);
+      normal.land(7);
+      const normalMs = tickUntil(normal, () => normal.isSettled);
+
+      const quick = new ReelAnimator(15);
+      quick.start();
+      for (let i = 0; i < 30; i++) quick.tick(16);
+      quick.quickStop(7);
+      const quickMs = tickUntil(quick, () => quick.isSettled);
+
+      expect(quickMs).toBeLessThan(normalMs);
+      // Quick-stop should settle within ~300ms
+      expect(quickMs).toBeLessThanOrEqual(300);
+    });
+
+    it("settles on the exact target stop when called during accel phase", () => {
+      const a = new ReelAnimator(15);
+      a.start();
+      // Just a couple ticks — still in accel
+      a.tick(16);
+      a.tick(16);
+      a.quickStop(5);
+      tickUntil(a, () => a.isSettled);
+      expect(a.isSettled).toBe(true);
+      expect(a.position).toBe(5);
+    });
+
+    it("is a no-op when already in decel phase", () => {
+      const a = new ReelAnimator(15);
+      a.start();
+      for (let i = 0; i < 30; i++) a.tick(16);
+      a.land(10);
+      // Tick until decel starts (past MIN_SPIN_MS_AFTER_LAND)
+      for (let i = 0; i < 20; i++) a.tick(16);
+      // Now call quickStop with a DIFFERENT target — should be ignored
+      a.quickStop(3);
+      tickUntil(a, () => a.isSettled);
+      expect(a.position).toBe(10); // Original target, not 3
+    });
+
+    it("is a no-op when already settled", () => {
+      const a = new ReelAnimator(15);
+      a.start();
+      for (let i = 0; i < 30; i++) a.tick(16);
+      a.land(10);
+      tickUntil(a, () => a.isSettled);
+      expect(a.position).toBe(10);
+      a.quickStop(3);
+      expect(a.position).toBe(10);
+    });
+  });
 });
