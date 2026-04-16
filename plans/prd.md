@@ -6,7 +6,7 @@ As a Game Developer candidate applying to IGT, I need to produce a playable 5×3
 
 ## Solution
 
-A resolved, end-to-end spec for a Vite + TypeScript + PixiJS v8 slot demo, organized around **three deep modules plus a thin orchestrator**. Every open question from the brief — paylines, symbols, win presentation, bet UI, outcome generation, balance, quick-stop, resizing, loading, RNG, audio, and stretch scope — is locked so I can implement without re-litigating choices. The architecture lets the reviewer follow one spin end-to-end through three files and makes the "server" boundary a real port with a mocked adapter behind it.
+A resolved, end-to-end spec for a Vite + TypeScript + PixiJS v8 slot demo, organized around **four deep modules plus a thin orchestrator**. Every open question from the brief — paylines, symbols, win presentation, bet UI, outcome generation, balance, quick-stop, resizing, loading, RNG, audio, and stretch scope — is locked so I can implement without re-litigating choices. The architecture lets the reviewer follow one spin end-to-end through three files and makes the "server" boundary a real port with a mocked adapter behind it.
 
 ## Goals
 
