@@ -3,14 +3,17 @@
 // in the codebase that references reel strips, paytable, paylines, PRNG, or
 // wallet state. A real HTTP backend would be a drop-in replacement.
 
-export type Symbol =
-  | "CHERRY"
-  | "BELL"
-  | "LEMON"
-  | "EMERALD"
-  | "DIAMOND"
-  | "SEVEN"
-  | "WILD";
+export const SYMBOLS = [
+  "CHERRY",
+  "BELL",
+  "LEMON",
+  "EMERALD",
+  "DIAMOND",
+  "SEVEN",
+  "WILD",
+] as const;
+
+export type Symbol = (typeof SYMBOLS)[number];
 
 export interface WinLine {
   lineId: number;

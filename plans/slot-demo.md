@@ -6,14 +6,15 @@
 
 Durable decisions that apply across all phases:
 
-- **Modules**: four deep modules + one thin orchestrator
-  - `src/server/slotMath.ts` — port `SlotServer` + `MockedServer` adapter; owns reel strips, paytable, paylines, PRNG, wallet/balance, line evaluation; colocates `SpinResponse`, `WinLine`, `Symbol` types
-  - `src/game/ReelBoard.ts` — 5×3 board; interface `spin()`, `requestStop()`, `land(response)`, `highlightLine(line, grid)`, `clearHighlight()`. Internally composes `ReelAnimator` (per-reel tick-driven easing/bounce state machine, unit-tested separately)
+- **Modules**: four deep modules + a thin view + pure math helpers
+  - `src/server/slotMath.ts` — port `SlotServer` + `MockedServer` adapter; owns reel strips, paytable, paylines, PRNG, wallet/balance, line evaluation; colocates `SpinResponse`, `WinLine`, `Symbol` types and exports the canonical `SYMBOLS` array
+  - `src/game/SpinController.ts` — pure-TS state machine + win presentation. Interface `tick(deltaMs): SpinSnapshot`, `pressButton()`, `setBet(bet)`. Owns the phase machine (`idle → requesting → spinning → stopping → presenting → idle`), tick-driven `MIN_SPIN_MS` countdown (replaces `setTimeout`/`cancellableDelay`), quick-stop routing, balance updates, rollup, and line cycling. Drives reel animations through a `ReelSink` callback interface
+  - `src/game/ReelBoard.ts` — 5×3 board; interface `spin()`, `requestStop(response)`, `land(response)`, `highlightLine(line, grid)`, `clearHighlight()`, `waitForSettle()`. Internally composes `ReelAnimator` (per-reel tick-driven easing/bounce state machine, unit-tested separately). Math helpers live in `reelMath.ts`
   - `src/game/BetSelector.ts` — Pixi-rendered bet control; emits `betChanged`, exposes `setEnabled`
-  - `src/game/WinPresenter.ts` — pure-TS timeline state machine for win presentation: `start(response)`, `stop()`, `tick(deltaMs)`, getters `rollupValue`, `activeLine`, `isRollupComplete`. No Pixi dependency; `Game` reads state each tick and delegates rendering
-  - `src/game/Game.ts` — thin orchestrator; receives `SlotServer` via constructor
+  - `src/game/Game.ts` — thin Pixi view (~140 lines). Builds UI, wires a `ReelSink` to `ReelBoard`, ticks `SpinController` each frame, and renders the returned `SpinSnapshot` onto Pixi properties (button label, balance text, highlight state). Contains no state-machine logic
+  - `src/game/reelMath.ts` — pure functions extracted from ReelBoard: `bakeGrid`, `computeCellSymbol`, `computeCellY`, `computeWinHighlight`. Unit-tested independently of Pixi
   - `src/main.ts` — bootstrap: asset preload with animated loading bar, then game construction
-- **State machine**: `LOADING → IDLE → REQUESTING → SPINNING → STOPPING → PRESENTING_WIN → IDLE`; quick-stop transitions `SPINNING → STOPPING`
+- **State machine** (owned by `SpinController`, phases are lowercase in code): `idle → requesting → spinning → stopping → presenting → idle`; quick-stop routes through `stopping` using `snapReels` instead of `landReels`. The `LOADING` phase lives in `main.ts` and completes before `Game` is constructed
 - **Ports & adapters**: `SlotServer` port with `spin(bet: number): Promise<SpinResult>`; `MockedServer` is the only adapter in v1
 - **Response shape**:
   ```ts
@@ -169,3 +170,31 @@ Source 6 plain symbol sprites + 1 Wild sprite + a frame/background image into `p
 - [x] No console errors during preload, including the cold-cache first load
 - [x] `npm run build` output still succeeds and the dist bundle plays identically to `npm run dev`
 - [x] All prior tests still pass
+
+---
+
+## Phase 7: Architectural hardening
+
+**User stories**: 13, 14, 17, 20 (no new player-visible behavior)
+
+### What to build
+
+Post-Phase-6 audit surfaced three untestable seams. This phase restructures the internals without changing behavior:
+
+1. **Extract `SpinController` from `Game`**. The 5-phase state machine, async spin orchestration, and win-presentation timing were entangled with Pixi object creation, making `Game` a ~280-line untestable orchestrator. Extract a pure-TS controller with `tick(deltaMs): SpinSnapshot`, `pressButton()`, `setBet(bet)`. Replace the `setTimeout`-based `MIN_SPIN_MS` hold with a tick-driven countdown — fully deterministic under `vi.fn` mocks, and quick-stop simply zeroes the counter. Reel animation calls go through a `ReelSink` callback interface (one consumer, no event bus needed). `Game` becomes a thin view that ticks the controller and renders the returned snapshot.
+2. **Absorb `WinPresenter` into `SpinController`**. At 55 lines and 8 public-API elements, `WinPresenter` was too shallow to justify a separate module boundary — the interface cost exceeded the implementation it hid. Fold its rollup and line-cycling logic into the controller's `presenting` phase.
+3. **Extract `reelMath.ts`**. Three pieces of critical math — strip baking (modulo indexing), cell-to-symbol mapping (wrap formula), win-highlight computation (wild-sub border detection) — were buried inside `ReelBoard`'s Pixi-coupled methods. Extract as pure functions with their own unit tests.
+4. **Consolidate `SYMBOLS`**. The 7 symbols were duplicated across `slotMath.ts` (type), `ReelBoard.ts` (`BASE_STRIP`), and `main.ts` (asset keys). Export a single `SYMBOLS` const array from `slotMath.ts` and derive `type Symbol = (typeof SYMBOLS)[number]`. Adding a symbol now requires editing one file.
+
+### Acceptance criteria
+
+- [x] `src/game/SpinController.ts` owns the state machine and win presentation; exports `createSpinController`, `SpinSnapshot`, `ReelSink`
+- [x] `src/game/SpinController.test.ts` covers: phase transitions, quick-stop uses `snapReels` (not `landReels`), insufficient-funds returns to idle, server rejection returns to idle, rollup timing, line cycling with wrap, spin-during-presenting interrupts
+- [x] `src/game/WinPresenter.ts` and `WinPresenter.test.ts` deleted — coverage migrated into `SpinController.test.ts`
+- [x] `src/game/Game.ts` is a thin Pixi view with no state-machine logic (constructor wires UI + `ReelSink`; `applySnapshot` writes snapshot fields to Pixi properties)
+- [x] `src/game/reelMath.ts` exports `bakeGrid`, `computeCellSymbol`, `computeCellY`, `computeWinHighlight`; `ReelBoard` calls these instead of inlining the math
+- [x] `src/game/reelMath.test.ts` covers: bakeGrid wrap-around (targetPos=0 and stripLen-1), computeCellSymbol for integer/fractional/wrapping positions, computeWinHighlight with wild-sub border color
+- [x] `slotMath.ts` exports `SYMBOLS` const; `ReelBoard.ts` and `main.ts` import it (no duplicate symbol lists)
+- [x] `npm run test` passes all suites (54 tests green post-refactor)
+- [x] `npm run build` succeeds with no type errors
+- [x] Player-visible behavior is unchanged — spin, quick-stop (both from `spinning` and `stopping`), win presentation, bet gating, insufficient funds all behave identically to Phase 6

@@ -6,7 +6,7 @@ As a Game Developer candidate applying to IGT, I need to produce a playable 5×3
 
 ## Solution
 
-A resolved, end-to-end spec for a Vite + TypeScript + PixiJS v8 slot demo, organized around **four deep modules plus a thin orchestrator**. Every open question from the brief — paylines, symbols, win presentation, bet UI, outcome generation, balance, quick-stop, resizing, loading, RNG, audio, and stretch scope — is locked so I can implement without re-litigating choices. The architecture lets the reviewer follow one spin end-to-end through three files and makes the "server" boundary a real port with a mocked adapter behind it.
+A resolved, end-to-end spec for a Vite + TypeScript + PixiJS v8 slot demo, organized around **four deep modules plus a thin Pixi view**: the state machine and win presentation live in a pure-TS `SpinController` that the view ticks each frame; reels, bet UI, and the server sit behind their own module boundaries. Every open question from the brief — paylines, symbols, win presentation, bet UI, outcome generation, balance, quick-stop, resizing, loading, RNG, audio, and stretch scope — is locked so I can implement without re-litigating choices. The architecture lets the reviewer follow one spin end-to-end through four files and makes the "server" boundary a real port with a mocked adapter behind it.
 
 ## Goals
 
@@ -60,7 +60,7 @@ A resolved, end-to-end spec for a Vite + TypeScript + PixiJS v8 slot demo, organ
 | Win presentation     | **Cycle-by-line**: total-win roll-up on entry, then loop through each winning line highlighting its symbols                                                                                                                                              |
 | Bet selector surface | **Pixi-rendered** (e.g. `<` / `>` arrows + bet label) — no DOM overlay                                                                                                                                                                                   |
 | Outcome generation   | **Strip-driven**: handcrafted reel strips, random stops, evaluate visible grid. Strips tuned wild-heavy for demo-friendly hit rate                                                                                                                       |
-| Quick-stop           | **Supported**: click/tap during `SPINNING` triggers `ReelBoard.requestStop()`                                                                                                                                                                            |
+| Quick-stop           | **Supported**: pressing Spin during `spinning` or `stopping` routes through `SpinController.pressButton()` and uses `ReelSink.snapReels` to land all reels immediately                                                                                   |
 | Balance              | **Server-authoritative**: `SpinResponse` carries `balanceAfter`; Spin disabled when last-known balance < bet                                                                                                                                             |
 | Canvas sizing        | **Fit-to-viewport scaling** with internal coords locked at 1280×720; one resize handler in bootstrap                                                                                                                                                     |
 | Asset loading        | **Pixi `Assets` manifest + loading screen**; state machine includes `LOADING → IDLE`                                                                                                                                                                     |
@@ -70,7 +70,7 @@ A resolved, end-to-end spec for a Vite + TypeScript + PixiJS v8 slot demo, organ
 | Payline geometry     | Line 1 = top row; Line 2 = middle row; Line 3 = bottom row; Line 4 = V-shape `[(0,0),(1,1),(2,2),(3,1),(4,0)]`; Line 5 = inverted-V `[(0,2),(1,1),(2,0),(3,1),(4,2)]`                                                                                    |
 | Insufficient funds   | `spin` returns `{ ok: false, error: 'INSUFFICIENT_FUNDS', balance }` when `bet > balance`. `Game` gates Spin at the UI level so this branch is defensive. Result type keeps the success shape clean and maps 1:1 to a future HTTP adapter's status/body. |
 | Zero balance         | No recovery UX in v1. Spin stays disabled; refreshing the page resets the session to `1000.00`. Documented in README.                                                                                                                                    |
-| Promise rejection    | On any rejection from `spin` (truly exceptional — network, bug), `Game` transitions `REQUESTING → IDLE` and logs the error. Expected errors (insufficient funds) come through the Result channel, not rejection. No retry/toast in v1.                   |
+| Promise rejection    | On any rejection from `spin` (truly exceptional — network, bug), `SpinController` transitions `requesting → idle` and logs the error. Expected errors (insufficient funds) come through the Result channel, not rejection. No retry/toast in v1.         |
 
 ## Functional Requirements
 
@@ -138,33 +138,39 @@ Invariants (testable at the `slotMath` boundary):
 
 ## Architecture & Code Organization
 
-Organized around **deep modules**: small interfaces hiding large implementations, so tests target boundaries rather than internals and readers aren't forced to bounce between many shallow files.
+Organized around **deep modules**: small interfaces hiding large implementations, so tests target boundaries rather than internals and readers aren't forced to bounce between many shallow files. The orchestration layer is a pure-TS state machine (`SpinController`) that the Pixi view (`Game`) ticks each frame — this separation makes the state machine unit-testable without a Pixi harness.
 
-### Four deep modules + one thin orchestrator
+### Four deep modules + thin Pixi view + pure math helpers
 
 1. **`src/server/slotMath.ts` (port + adapter)**
    - Port: `interface SlotServer { spin(bet: number): Promise<SpinResult> }` where `SpinResult` is a discriminated union of `{ ok: true, data: SpinResponse }` and `{ ok: false, error: 'INSUFFICIENT_FUNDS', balance }`.
    - Adapter `MockedServer` implements it, hiding reel strips, paylines, paytable, PRNG, line evaluation, and wallet/balance state.
-   - Types `SpinResult`, `SpinResponse`, `WinLine`, `Symbol` are colocated here — the only place outcome shape is defined. No standalone `types/` or `config/` directories.
+   - Types `SpinResult`, `SpinResponse`, `WinLine`, `Symbol` are colocated here — the only place outcome shape is defined. Also exports the canonical `SYMBOLS` array; `type Symbol` is derived from it so adding a symbol requires editing one file. No standalone `types/` or `config/` directories.
    - Constructor accepts `{ seed?: number, startingBalance?: number }`. Defaults: random seed, `1000.00` balance. Seed and starting balance are adapter construction concerns, not part of the port — a future HTTP adapter ignores them.
 
-2. **`src/game/ReelBoard.ts`**
-   - One concept: the 5×3 board and what it shows.
-   - Interface: `spin(): void`, `requestStop(): void`, `land(response: SpinResponse): Promise<void>`, `highlightLine(line, grid): void`, `clearHighlight(): void`.
-   - Hides sprite pool, per-reel easing/bounce, symbol strip scrolling, and the geometry of applying a highlight/dim to specific cells (including a distinct marker for wild substitutions).
+2. **`src/game/SpinController.ts`**
+   - Pure TypeScript state machine + win presentation. Interface: `tick(deltaMs): SpinSnapshot`, `pressButton()`, `setBet(bet)`. Factory `createSpinController(deps)`.
+   - Owns the phase machine `idle → requesting → spinning → stopping → presenting → idle`, tick-driven `MIN_SPIN_MS` hold (replaces `setTimeout`/`cancellableDelay` — fully deterministic under mocks), quick-stop routing (`pressButton` during `spinning`/`stopping` uses `snapReels` instead of `landReels`), balance tracking, rollup easing, and indefinite per-line cycling.
+   - `SpinSnapshot` is an immutable read-only record (`phase`, `balance`, `canSpin`, `canStop`, `betEnabled`, `rollupValue`, `activeLine`, `grid`) — the view renders it and nothing else.
+   - Drives reel animations through a `ReelSink` callback interface (`spinReels`, `landReels`, `snapReels`, `clearHighlight`) rather than holding a Pixi dependency. One consumer — the cost of an event bus would exceed the benefit.
 
-3. **`src/game/BetSelector.ts`**
+3. **`src/game/ReelBoard.ts`**
+   - One concept: the 5×3 board and what it shows.
+   - Interface: `spin(): void`, `requestStop(response): void`, `land(response): Promise<void>`, `waitForSettle(): Promise<void>`, `highlightLine(line, grid): void`, `clearHighlight(): void`.
+   - Hides sprite pool, per-reel easing/bounce (via the internal `ReelAnimator`), symbol strip scrolling, and the geometry of applying a highlight/dim to specific cells (including a distinct gold border for wild substitutions vs. white for wild-line matches).
+   - Critical math — strip baking, cell-to-symbol wrapping, highlight computation — lives in `reelMath.ts` as pure functions.
+
+4. **`src/game/BetSelector.ts`**
    - Pixi-rendered control (arrow buttons + bet label) over a fixed bet list. Emits `betChanged(newBet)`. Exposes `setEnabled(bool)` for disabling during spins.
 
-4. **`src/game/WinPresenter.ts`**
-   - Pure TypeScript (no Pixi) timeline/state machine for win presentation. Interface: `start(response)`, `stop()`, `tick(deltaMs)`, getters `rollupValue`, `activeLine`, `isRollupComplete`.
-   - Hides rollup easing and per-line cycling with indefinite wrap-around. Kept separate from `ReelBoard` so the timeline is unit-testable under deterministic `tick` drive and stays decoupled from rendering — `Game` reads state each Pixi tick and delegates rendering to `ReelBoard.highlightLine` / `clearHighlight` and a Pixi total-win `Text`.
+**Thin Pixi view** — `src/game/Game.ts` (~140 lines)
 
-5. **`src/game/Game.ts` (thin orchestrator)**
-   - Owns the state machine: `LOADING → IDLE → REQUESTING → SPINNING → STOPPING → PRESENTING_WIN → IDLE`.
-   - `SPINNING` accepts a `quickStop` input that transitions directly to `STOPPING` via `ReelBoard.requestStop()`.
-   - Receives `SlotServer` via constructor (ports & adapters), so tests and future real backends are drop-in.
-   - Contains no outcome math and no animation math — both live behind module boundaries.
+- Builds the Pixi UI (background, frame, reel board, labels, bet selector, spin button), wires a `ReelSink` to `ReelBoard` methods, registers a ticker handler that calls `controller.tick(deltaMS)` each frame, and writes the returned `SpinSnapshot` onto Pixi properties in `applySnapshot`.
+- Contains no state-machine logic, no async coordination, no animation timing — all of that lives in `SpinController`. If a behavior can be unit-tested, it's not in `Game`.
+
+**Pure math helpers** — `src/game/reelMath.ts`
+
+- `bakeGrid`, `computeCellSymbol`, `computeCellY`, `computeWinHighlight`. Extracted from `ReelBoard` so the modulo-wrapping and wild-sub detection logic is unit-testable without a Pixi harness.
 
 ### Bootstrap
 
@@ -172,15 +178,15 @@ Organized around **deep modules**: small interfaces hiding large implementations
 
 1. Parses `?seed=` from `location.search`.
 2. Creates the Pixi `Application` at 1280×720 and attaches a single resize handler that scales the stage to viewport.
-3. Preloads the `Assets` manifest, rendering a Pixi-based progress bar.
-4. Constructs `MockedServer`, `ReelBoard`, `BetSelector`, `Game` and wires them.
+3. Preloads the `Assets` manifest (using the `SYMBOLS` array from `slotMath`), rendering a Pixi-based progress bar.
+4. Constructs `MockedServer` and `Game`; `Game`'s constructor internally creates `ReelBoard`, `BetSelector`, and the `SpinController` and wires them together.
 
 ### Why this shape
 
 - **Brief-compliant**: "server logic separated from game, fetched via simple API call" is satisfied by the `SlotServer` port.
-- **Testable at the boundary**: fixed seed + bet → pinned response; response-invariant assertions cover everything the private helpers would otherwise need direct tests for.
-- **Clean seams**: `WinPresenter` owns _timing_ (rollup, line-cycle) while `ReelBoard` owns _geometry_ (which cell to dim/highlight). The presenter never reaches into reel layout — it exposes `activeLine` and `rollupValue`, and `Game` bridges. This keeps the timeline unit-testable without a Pixi harness.
-- **Reviewer-navigable**: following a spin end-to-end means reading four files — `Game`, `ReelBoard`, `WinPresenter`, `slotMath` — not eight.
+- **Testable at the boundary**: fixed seed + bet → pinned response; response-invariant assertions cover everything the private helpers would otherwise need direct tests for. The full spin lifecycle — phase transitions, quick-stop, rollup, line cycling — is unit-testable through `SpinController.tick()` without a Pixi or DOM harness.
+- **Clean seams**: `SpinController` owns _orchestration + timing_ (phase machine, rollup, line-cycle) and exposes a read-only `SpinSnapshot`; `ReelBoard` owns _geometry and animation_ (which cell to dim/highlight, how reels decelerate); `reelMath.ts` owns _strip arithmetic_ (pure, stateless). `Game` is the bridge — it translates snapshots to Pixi property writes and routes `ReelSink` calls to `ReelBoard`. Responsibilities move one direction only: view reads controller, controller drives reels through a callback interface.
+- **Reviewer-navigable**: following a spin end-to-end means reading four files — `Game` (the view), `SpinController` (the state machine), `ReelBoard` (the reels), `slotMath` (the server) — not eight.
 
 ## Tech Stack
 
@@ -226,10 +232,12 @@ A reviewer should be able to:
   - Invariants across many spins at a fixed seed: `grid` reconstructs from `stops` and strips; each `WinLine.positions` matches its `lineId` geometry; `sum(lines[].win) === totalWin`; `balanceAfter === previousBalance - bet + totalWin`.
   - Wild substitution: pinned spins that force a wild on a paying line, asserting the line still reports the non-wild symbol as `symbol`.
   - Insufficient-funds: calling `spin(bet)` when `bet > balance` resolves to `{ ok: false, error: 'INSUFFICIENT_FUNDS', balance }`; assert the discriminant, the reported `balance`, and that a subsequent `spin` at a valid bet still sees the unchanged balance.
-- **`ReelBoard`** — no unit tests for rendering. `ReelAnimator` (extracted easing/bounce state machine) has its own deterministic tick-driven tests.
-- **`WinPresenter`** — yes. Deterministic `tick`-driven tests cover the no-win skip, rollup 0→totalWin, post-rollup line cycling with wrap-around, and `stop()` reset.
+- **`SpinController`** — yes. Deterministic `tick`-driven tests with a fake `SlotServer` and mocked `ReelSink` cover: initial state + `canSpin` gating, full phase lifecycle (`idle → requesting → spinning → stopping → idle`), transition to `presenting` on wins with balance update, quick-stop from `spinning` uses `snapReels` (not `landReels`), insufficient-funds and server rejection both return to `idle`, rollup interpolates 0 → `totalWin` over `ROLLUP_MS`, post-rollup line cycling wraps back to the first line, pressing spin during `presenting` interrupts and starts a new request, `setBet` updates the `canSpin` gate.
+- **`reelMath`** — yes. Pure-function tests cover: `bakeGrid` basic and wrap-around cases (targetPos=0, targetPos=stripLen-1), `computeCellSymbol` for integer / fractional / wrapping / negative-visualRow positions, `computeCellY` sign, `computeWinHighlight` dimming non-winning cells and emitting gold border for wild substitutions vs. white for wild-line matches.
+- **`ReelAnimator`** — yes. Deterministic tick-driven tests for the per-reel easing/bounce state machine.
+- **`ReelBoard`** — no unit tests for rendering. All its math lives in `reelMath` (tested) and `ReelAnimator` (tested); what remains in `ReelBoard` is Pixi wiring.
 - **`BetSelector`** — has a small suite covering bet cycling and enable/disable behavior.
-- **`Game`** — no unit tests in v1. State-machine tests with a fake `SlotServer` are a natural next step and worth mentioning in interview as "this is where I'd add tests next."
+- **`Game`** — no unit tests; it's now a ~140-line thin view with no logic beyond snapshot → Pixi property writes. The state machine it used to own is tested via `SpinController`.
 
 ### Prior art
 

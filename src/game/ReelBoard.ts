@@ -1,21 +1,19 @@
 import { Assets, Container, Graphics, Sprite, Ticker } from "pixi.js";
+import { SYMBOLS } from "../server/slotMath";
 import type { Symbol, SpinResponse, WinLine } from "../server/slotMath";
 import { ReelAnimator } from "./ReelAnimator";
+import {
+  bakeGrid,
+  computeCellSymbol,
+  computeCellY,
+  computeWinHighlight,
+} from "./reelMath";
 
 // A purely cosmetic strip used while reels are spinning freely. The "real"
 // symbols only matter at the moment reels land — see `land()` below for how
 // we bake the server's grid into the strip at the target indices so the
 // final symbols are already scrolling in during deceleration.
-const BASE_STRIP: Symbol[] = [
-  "CHERRY",
-  "BELL",
-  "LEMON",
-  "EMERALD",
-  "DIAMOND",
-  "SEVEN",
-  "WILD",
-];
-const STRIP_LEN = BASE_STRIP.length;
+const STRIP_LEN = SYMBOLS.length;
 
 const CELL_W = 160;
 const CELL_H = 160;
@@ -80,7 +78,7 @@ export class ReelBoard {
         container: reelContainer,
         animator: new ReelAnimator(STRIP_LEN),
         cells,
-        strip: [...BASE_STRIP],
+        strip: [...SYMBOLS],
         settledApplied: true,
       };
       this.reels.push(reel);
@@ -91,7 +89,7 @@ export class ReelBoard {
 
   spin(): void {
     for (const reel of this.reels) {
-      reel.strip = [...BASE_STRIP];
+      reel.strip = [...SYMBOLS];
       reel.settledApplied = false;
       reel.animator.start();
     }
@@ -108,9 +106,7 @@ export class ReelBoard {
     for (let c = 0; c < COLS; c++) {
       const reel = this.reels[c];
       const targetPos = response.stops[c] % STRIP_LEN;
-      for (let r = 0; r < ROWS; r++) {
-        reel.strip[(targetPos + r) % STRIP_LEN] = response.grid[c][r];
-      }
+      reel.strip = bakeGrid(reel.strip, targetPos, response.grid[c], STRIP_LEN);
       reel.settledApplied = false;
       reel.animator.quickStop(targetPos);
     }
@@ -124,9 +120,7 @@ export class ReelBoard {
       // Bake the real grid symbols into this reel's strip at the exact
       // indices the animator will settle on, so the symbols rolling in
       // during deceleration are already the final ones — no jump at land.
-      for (let r = 0; r < ROWS; r++) {
-        reel.strip[(targetPos + r) % STRIP_LEN] = response.grid[c][r];
-      }
+      reel.strip = bakeGrid(reel.strip, targetPos, response.grid[c], STRIP_LEN);
       const delayMs = STAGGER_MS * c;
       if (delayMs > 0) {
         setTimeout(() => reel.animator.land(targetPos), delayMs);
@@ -160,24 +154,19 @@ export class ReelBoard {
   // into a non-wild-paying line get a gold border instead of white, so the
   // player can see _why_ the line paid.
   highlightLine(line: WinLine, grid: Symbol[][]): void {
-    const winningSet = new Set(line.positions.map(([c, r]) => `${c},${r}`));
-    for (let c = 0; c < COLS; c++) {
-      for (let r = 0; r < ROWS; r++) {
-        const cell = this.reels[c].cells[OVERSCAN + r];
-        const isWinning = winningSet.has(`${c},${r}`);
-        cell.sprite.alpha = isWinning ? 1 : 0.3;
+    const cells = computeWinHighlight(line, grid, COLS, ROWS);
+    for (const { col, row, isWinning, borderColor } of cells) {
+      const cell = this.reels[col].cells[OVERSCAN + row];
+      cell.sprite.alpha = isWinning ? 1 : 0.3;
 
-        cell.highlight.clear();
-        if (isWinning) {
-          const isWildSub = grid[c][r] === "WILD" && line.symbol !== "WILD";
-          const color = isWildSub ? 0xffd700 : 0xffffff;
-          cell.highlight.rect(0, 0, CELL_W, CELL_H);
-          cell.highlight.stroke({ width: 6, color });
-          cell.highlight.y = cell.sprite.y;
-          cell.highlight.visible = true;
-        } else {
-          cell.highlight.visible = false;
-        }
+      cell.highlight.clear();
+      if (isWinning && borderColor !== null) {
+        cell.highlight.rect(0, 0, CELL_W, CELL_H);
+        cell.highlight.stroke({ width: 6, color: borderColor });
+        cell.highlight.y = cell.sprite.y;
+        cell.highlight.visible = true;
+      } else {
+        cell.highlight.visible = false;
       }
     }
   }
@@ -212,14 +201,11 @@ export class ReelBoard {
   }
 
   private renderReel(reel: Reel, pos: number): void {
-    const intPart = Math.floor(pos);
-    const frac = pos - intPart;
     for (let i = 0; i < reel.cells.length; i++) {
       const visualRow = i - OVERSCAN;
-      const stripIdx = (intPart + visualRow + STRIP_LEN * 1000) % STRIP_LEN;
-      const sym = reel.strip[stripIdx];
+      const sym = computeCellSymbol(reel.strip, pos, visualRow, STRIP_LEN);
+      const y = computeCellY(pos, visualRow, CELL_H);
       const cell = reel.cells[i];
-      const y = (visualRow - frac) * CELL_H;
       cell.sprite.y = y;
       const texture = Assets.get(`symbol-${sym}`);
       if (texture && cell.sprite.texture !== texture) {

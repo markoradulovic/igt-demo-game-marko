@@ -8,7 +8,7 @@ import {
 } from "pixi.js";
 import { MockedServer } from "./server/slotMath";
 import { Game } from "./game/Game";
-import type { Symbol } from "./server/slotMath";
+import { SYMBOLS } from "./server/slotMath";
 
 // Internal coordinate system. All gameplay code positions elements against a
 // fixed 1280×720 stage; `fitToViewport` applies a single uniform scale so the
@@ -34,16 +34,6 @@ function fitToViewport(app: Application, stage: Container): void {
   stage.y = (window.innerHeight - STAGE_H * scale) / 2;
   app.renderer.resize(window.innerWidth, window.innerHeight);
 }
-
-const SYMBOLS: Symbol[] = [
-  "CHERRY",
-  "BELL",
-  "LEMON",
-  "EMERALD",
-  "DIAMOND",
-  "SEVEN",
-  "WILD",
-];
 
 async function init(): Promise<void> {
   const app = new Application();
