@@ -135,7 +135,9 @@ const REEL_STRIPS: Symbol[][] = [
   ],
 ];
 
-const PAYLINES: [number, number][][] = [
+// Exported so the anticipation helper can share the canonical line geometry
+// with `evaluateLine` — one source of truth for what "a line" means.
+export const PAYLINES: readonly (readonly (readonly [number, number])[])[] = [
   [
     [0, 0],
     [1, 0],
@@ -183,6 +185,16 @@ const PAYTABLE: Record<Symbol, [number, number, number]> = {
   WILD: [10, 50, 500],
 };
 
+// Threshold picked so the set lands on the three symbols players already read
+// as jackpot-tier (WILD, CHERRY, BELL). Derived from PAYTABLE rather than
+// hand-maintained so paytable tweaks flow through without a second edit.
+const ANTICIPATION_PAYOUT_THRESHOLD = 50;
+export const HIGH_PAYING_SYMBOLS: ReadonlySet<Symbol> = new Set(
+  (Object.keys(PAYTABLE) as Symbol[]).filter(
+    (s) => PAYTABLE[s][2] >= ANTICIPATION_PAYOUT_THRESHOLD
+  )
+);
+
 function mulberry32(seed: number): () => number {
   let t = seed >>> 0;
   return () => {
@@ -196,7 +208,7 @@ function mulberry32(seed: number): () => number {
 
 function evaluateLine(
   grid: Symbol[][],
-  line: [number, number][],
+  line: readonly (readonly [number, number])[],
   lineId: number,
   bet: number
 ): WinLine | null {
@@ -219,7 +231,7 @@ function evaluateLine(
     lineId,
     symbol: target,
     count: count as 3 | 4 | 5,
-    positions: line.slice(0, count),
+    positions: line.slice(0, count).map(([c, r]) => [c, r]),
     win: bet * multiplier,
   };
 }

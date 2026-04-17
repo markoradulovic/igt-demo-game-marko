@@ -87,11 +87,11 @@ A resolved, end-to-end spec for a Vite + TypeScript + PixiJS v8 slot demo, organ
 ### Stretch (shipping)
 
 - **Unit tests** for `slotMath` via Vitest, constructed with a fixed seed, asserting response invariants and exact outputs for pinned cases.
+- **Anticipation effect** on reels 4–5 when reels 1–3 land on matching high-paying symbols (Phase 8). Decision logic is a pure function testable without Pixi; `SpinController` exposes the trigger via `SpinSnapshot.anticipation` so the view reads it the same way it reads every other state.
+- **Keyboard controls** (Phase 8): `Space` = spin/quick-stop, `←` / `→` = bet cycle. A thin input layer that calls the same `pressButton()` / `setBet()` methods the on-canvas UI uses.
 
-### Stretch (deferred, documented in README for interview discussion)
+### Stretch (deferred, documented for interview discussion)
 
-- Anticipation effect on 3rd–5th reels when high-symbol match builds.
-- Keyboard controls (Space = spin/quick-stop, Arrows = bet).
 - Real backend adapter behind the `SlotServer` port.
 
 ## Response Shape

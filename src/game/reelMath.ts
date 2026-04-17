@@ -60,6 +60,34 @@ export interface HighlightCell {
  * Compute highlight state for each cell given a win line.
  * Wild cells that substituted into a non-wild-paying line get a gold border.
  */
+/**
+ * Anticipation: do reels 0–2 already telegraph a potential big win?
+ *
+ * Returns the reels that should play the "slow + pulse" presentation (reels
+ * 3–4) when the first three reels all show the same high-paying symbol along
+ * a payline prefix. Pure function so the trigger logic is unit-testable
+ * without a Pixi harness or a spin in flight.
+ *
+ * Checks only the first three positions of each payline because a four-of-a-
+ * kind that starts on reel 4 can't benefit from slowing reels 3–4.
+ */
+export function shouldAnticipate(
+  grid: Symbol[][],
+  paylines: readonly (readonly (readonly [number, number])[])[],
+  highPayingSymbols: ReadonlySet<Symbol>
+): { reels: number[] } | null {
+  for (const line of paylines) {
+    const [a, b, c] = line;
+    const s0 = grid[a[0]][a[1]];
+    const s1 = grid[b[0]][b[1]];
+    const s2 = grid[c[0]][c[1]];
+    if (s0 === s1 && s1 === s2 && highPayingSymbols.has(s0)) {
+      return { reels: [3, 4] };
+    }
+  }
+  return null;
+}
+
 export function computeWinHighlight(
   line: WinLine,
   grid: Symbol[][],

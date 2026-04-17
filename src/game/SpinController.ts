@@ -4,12 +4,19 @@
 // view to render. All time-dependent behavior advances via `tick(deltaMs)` so
 // the full lifecycle is deterministic under test without timer plumbing.
 
-import type {
-  SlotServer,
-  SpinResponse,
-  WinLine,
-  Symbol,
+import {
+  HIGH_PAYING_SYMBOLS,
+  PAYLINES,
+  type SlotServer,
+  type SpinResponse,
+  type WinLine,
+  type Symbol,
 } from "../server/slotMath";
+import { shouldAnticipate } from "./reelMath";
+
+export interface AnticipationState {
+  reels: number[];
+}
 
 // Minimum time reels visibly spin before landing. A tick-decremented counter
 // rather than a setTimeout so quick-stop can zero it and tests can advance it
@@ -38,12 +45,16 @@ export interface SpinSnapshot {
   readonly rollupValue: number;
   readonly activeLine: WinLine | null;
   readonly grid: Symbol[][] | null;
+  readonly anticipation: AnticipationState | null;
 }
 
 /** Callbacks the controller fires to drive reel animations. */
 export interface ReelSink {
   spinReels(): void;
-  landReels(response: SpinResponse): Promise<void>;
+  landReels(
+    response: SpinResponse,
+    anticipation: AnticipationState | null
+  ): Promise<void>;
   snapReels(response: SpinResponse): Promise<void>;
   clearHighlight(): void;
 }
@@ -75,6 +86,9 @@ class SpinControllerImpl implements SpinController {
   private spinHoldRemaining = 0;
   private pendingResponse: SpinResponse | null = null;
   private quickStopRequested = false;
+  // Computed once when the server response arrives so the snapshot is stable
+  // across ticks; cleared when the spin fully resolves (settle or no-win).
+  private pendingAnticipation: AnticipationState | null = null;
 
   private presentingResponse: SpinResponse | null = null;
   private presentElapsed = 0;
@@ -134,6 +148,7 @@ class SpinControllerImpl implements SpinController {
       rollupValue: this.computeRollupValue(),
       activeLine: this.phase === "presenting" ? this.computeActiveLine() : null,
       grid: this.presentingResponse?.grid ?? null,
+      anticipation: this.pendingAnticipation,
     };
   }
 
@@ -187,6 +202,11 @@ class SpinControllerImpl implements SpinController {
           return;
         }
         this.pendingResponse = result.data;
+        this.pendingAnticipation = shouldAnticipate(
+          result.data.grid,
+          PAYLINES,
+          HIGH_PAYING_SYMBOLS
+        );
         this.spinHoldRemaining = MIN_SPIN_MS;
         this.phase = "spinning";
       },
@@ -201,11 +221,15 @@ class SpinControllerImpl implements SpinController {
     if (!this.pendingResponse) return;
     this.phase = "stopping";
     const response = this.pendingResponse;
-    this.pendingResponse = null;
+    // Keep `pendingResponse` populated through `stopping` so a second Stop
+    // press (e.g. during the anticipation hold on reels 4–5) can snap the
+    // still-unlanded reels. Cleared when reels fully settle below.
 
+    // Quick-stop cancels anticipation: the player asked to skip the drama,
+    // so we don't slow reels 3–4 or pulse them. Normal land passes it through.
     const settlePromise = this.quickStopRequested
       ? this.reels.snapReels(response)
-      : this.reels.landReels(response);
+      : this.reels.landReels(response, this.pendingAnticipation);
 
     settlePromise.then(() => {
       this.onReelsSettled(response);
@@ -214,6 +238,10 @@ class SpinControllerImpl implements SpinController {
 
   private onReelsSettled(response: SpinResponse): void {
     this.balance = response.balanceAfter;
+    this.pendingResponse = null;
+    // Anticipation only telegraphs the in-flight spin — once reels settle the
+    // visual cue is done regardless of whether the big win actually paid.
+    this.pendingAnticipation = null;
     if (response.totalWin > 0) {
       this.phase = "presenting";
       this.presentingResponse = response;

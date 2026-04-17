@@ -198,3 +198,30 @@ Post-Phase-6 audit surfaced three untestable seams. This phase restructures the 
 - [x] `npm run test` passes all suites (54 tests green post-refactor)
 - [x] `npm run build` succeeds with no type errors
 - [x] Player-visible behavior is unchanged — spin, quick-stop (both from `spinning` and `stopping`), win presentation, bet gating, insufficient funds all behave identically to Phase 6
+
+---
+
+## Phase 8: Anticipation + keyboard controls
+
+**User stories**: 20 (previously-deferred stretch items, now in scope)
+
+### What to build
+
+Two deferred stretch features the architecture was designed to absorb cleanly. Both are additive; no existing phase behavior changes.
+
+1. **Anticipation effect** — when reels 1–3 all land on the same high-paying symbol (WILD, CHERRY, or any symbol whose 5-of-a-kind multiplier meets a threshold), reels 4 and 5 slow to a reduced steady speed and visually pulse (tint flash or subtle scale) to telegraph a potential big win. The anticipation trigger is computed from the already-received `SpinResponse.grid` at the moment `spinning → stopping` transition begins for reels 1–3, so no new server data is needed. `SpinController` gains an `anticipation` field on `SpinSnapshot` (`null` or `{ reels: number[] }`); `ReelBoard.land` reads it to stretch the stagger delay and apply the tint. Pure-TS decision logic lives in a new helper `shouldAnticipate(grid, paytable)` inside `reelMath.ts` (or a peer `anticipation.ts`) so it's unit-testable without Pixi.
+2. **Keyboard controls** — `Space` = press Spin button (spin or quick-stop depending on phase); `←` / `→` = cycle bet down/up. A small `KeyboardInput` module attaches a single `window.addEventListener('keydown')` in `Game`'s constructor and routes to the same `controller.pressButton()` and `betSelector.prev()`/`next()` methods the UI already calls. Respects `betEnabled` / `canSpin` / `canStop` gates by reading the latest snapshot — no keyboard-specific state.
+
+### Acceptance criteria
+
+- [x] Anticipation triggers when reels 1–3 land on matching high-paying symbols; reels 4–5 visibly slow and pulse
+- [x] Anticipation does not trigger on non-matching or low-paying landings
+- [x] Anticipation never delays the final settle beyond ~1.5× the normal stagger window (no runaway waits)
+- [x] `SpinSnapshot` gains an `anticipation` field; `SpinController.test.ts` covers trigger and non-trigger cases
+- [x] Pure anticipation-decision helper has its own unit tests in `reelMath.test.ts` (or `anticipation.test.ts`)
+- [x] `Space` spins when idle/presenting, quick-stops during spinning/stopping, and is a no-op when `canSpin`/`canStop` are both false
+- [x] `←` / `→` cycle the bet; no-op when `betEnabled` is false or at the list boundaries
+- [x] Repeated keydown events (holding a key) don't spam spins — either `e.repeat` is ignored or the existing phase gate prevents it
+- [x] Keyboard handler is removed on `Game` teardown (no listener leak if the game is re-constructed)
+- [x] All prior tests still pass; `npm run typecheck`, `npm run build`, `npm run test` all green
+- [x] README's "How to play" section documents the keyboard shortcuts

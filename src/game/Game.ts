@@ -4,6 +4,7 @@ import { ReelBoard } from "./ReelBoard";
 import { BetSelector } from "./BetSelector";
 import { createSpinController } from "./SpinController";
 import type { SpinController, SpinSnapshot } from "./SpinController";
+import { attachKeyboardInput } from "./KeyboardInput";
 
 export class Game {
   readonly view: Container;
@@ -16,6 +17,7 @@ export class Game {
   private spinButtonBg: Graphics;
   private spinLabel: Text;
   private lastActiveLine: unknown = null;
+  private detachKeyboard: (() => void) | null = null;
 
   constructor(
     server: SlotServer,
@@ -101,7 +103,7 @@ export class Game {
       initialBet: this.betSelector.bet,
       reels: {
         spinReels: () => this.board.spin(),
-        landReels: (r) => this.board.land(r),
+        landReels: (r, ant) => this.board.land(r, ant),
         snapReels: (r) => {
           this.board.requestStop(r);
           return this.board.waitForSettle();
@@ -114,6 +116,19 @@ export class Game {
       this.applySnapshot(this.controller.tick(t.deltaMS))
     );
     this.applySnapshot(this.controller.tick(0));
+
+    if (typeof window !== "undefined") {
+      this.detachKeyboard = attachKeyboardInput(window, {
+        onSpin: () => this.controller.pressButton(),
+        onBetPrev: () => this.betSelector.prev(),
+        onBetNext: () => this.betSelector.next(),
+      });
+    }
+  }
+
+  destroy(): void {
+    this.detachKeyboard?.();
+    this.detachKeyboard = null;
   }
 
   private applySnapshot(snap: SpinSnapshot): void {

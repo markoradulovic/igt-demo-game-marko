@@ -9,6 +9,10 @@ import {
   computeWinHighlight,
 } from "./reelMath";
 
+export interface AnticipationHint {
+  reels: number[];
+}
+
 // A purely cosmetic strip used while reels are spinning freely. The "real"
 // symbols only matter at the moment reels land — see `land()` below for how
 // we bake the server's grid into the strip at the target indices so the
@@ -22,6 +26,12 @@ const ROWS = 3;
 const REEL_GAP = 8;
 const OVERSCAN = 1;
 const STAGGER_MS = 180;
+// Extra hold on anticipated reels. Sized so the total settle stays within
+// ~1.5× the normal stagger window — enough to read the "chase" beat without
+// testing the player's patience.
+const ANTICIPATION_HOLD_MS = 450;
+const ANTICIPATION_PULSE_COLOR = 0xffd27f;
+const ANTICIPATION_PULSE_MS = 450;
 
 interface ReelCell {
   sprite: Sprite;
@@ -41,6 +51,8 @@ export class ReelBoard {
   private readonly reels: Reel[] = [];
   private readonly ticker: Ticker;
   private tickHandler: ((t: Ticker) => void) | null = null;
+  private anticipatingReels: Set<number> = new Set();
+  private anticipationElapsed = 0;
 
   constructor(ticker: Ticker = Ticker.shared) {
     this.ticker = ticker;
@@ -113,7 +125,16 @@ export class ReelBoard {
     this.startTicking();
   }
 
-  async land(response: SpinResponse): Promise<void> {
+  async land(
+    response: SpinResponse,
+    anticipation: AnticipationHint | null = null
+  ): Promise<void> {
+    // Cells on anticipated reels pulse during the extended hold so the player
+    // gets a visual cue, not just a timing cue, that reels 4–5 might land a
+    // jackpot-tier match. Tint is cleared when reels settle below.
+    this.anticipatingReels = new Set(anticipation?.reels ?? []);
+    this.anticipationElapsed = 0;
+
     for (let c = 0; c < COLS; c++) {
       const reel = this.reels[c];
       const targetPos = response.stops[c] % STRIP_LEN;
@@ -121,7 +142,8 @@ export class ReelBoard {
       // indices the animator will settle on, so the symbols rolling in
       // during deceleration are already the final ones — no jump at land.
       reel.strip = bakeGrid(reel.strip, targetPos, response.grid[c], STRIP_LEN);
-      const delayMs = STAGGER_MS * c;
+      const holdMs = this.anticipatingReels.has(c) ? ANTICIPATION_HOLD_MS : 0;
+      const delayMs = STAGGER_MS * c + holdMs;
       if (delayMs > 0) {
         setTimeout(() => reel.animator.land(targetPos), delayMs);
       } else {
@@ -145,6 +167,8 @@ export class ReelBoard {
     for (const reel of this.reels) {
       reel.settledApplied = true;
     }
+    this.clearAnticipationTint();
+    this.anticipatingReels.clear();
     this.stopTicking();
   }
 
@@ -197,6 +221,38 @@ export class ReelBoard {
       if (reel.settledApplied) continue;
       reel.animator.tick(deltaMs);
       this.renderReel(reel, reel.animator.position);
+    }
+    if (this.anticipatingReels.size > 0) {
+      this.anticipationElapsed += deltaMs;
+      this.applyAnticipationPulse();
+    }
+  }
+
+  // Sinusoidal alpha dip on anticipated reels. Using alpha (not Pixi tint)
+  // keeps the change legible against the mixed-color symbols without
+  // swapping any textures, which would force a re-bind.
+  private applyAnticipationPulse(): void {
+    const t =
+      (this.anticipationElapsed % ANTICIPATION_PULSE_MS) /
+      ANTICIPATION_PULSE_MS;
+    const alpha = 0.7 + 0.3 * Math.sin(t * Math.PI * 2);
+    for (const col of this.anticipatingReels) {
+      const reel = this.reels[col];
+      if (reel.animator.isSettled) continue;
+      for (const cell of reel.cells) {
+        cell.sprite.alpha = alpha;
+        cell.sprite.tint = ANTICIPATION_PULSE_COLOR;
+      }
+    }
+  }
+
+  private clearAnticipationTint(): void {
+    for (const col of this.anticipatingReels) {
+      const reel = this.reels[col];
+      for (const cell of reel.cells) {
+        cell.sprite.alpha = 1;
+        cell.sprite.tint = 0xffffff;
+      }
     }
   }
 

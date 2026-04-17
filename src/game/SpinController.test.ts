@@ -164,6 +164,46 @@ describe("SpinController", () => {
       expect(reels.snapReels).toHaveBeenCalled();
       expect(reels.landReels).not.toHaveBeenCalled();
     });
+
+    it("quick-stop during stopping calls snapReels so anticipation-held reels snap", async () => {
+      // Block landReels on a manual promise so phase stays in "stopping"
+      // while the player presses Stop a second time.
+      let resolveLand: () => void = () => {};
+      const landPromise = new Promise<void>((res) => {
+        resolveLand = res;
+      });
+      const reels: ReelSink = {
+        spinReels: vi.fn(),
+        landReels: vi.fn().mockReturnValue(landPromise),
+        snapReels: vi.fn().mockResolvedValue(undefined),
+        clearHighlight: vi.fn(),
+      };
+      const server = makeServer();
+      const ctrl = createSpinController({
+        server,
+        reels,
+        initialBalance: 1000,
+        initialBet: 1,
+      });
+
+      ctrl.pressButton();
+      await flushPromises();
+      expect(ctrl.tick(0).phase).toBe("spinning");
+
+      // Elapse MIN_SPIN_MS so transitionToStopping fires; landReels stays pending.
+      for (let i = 0; i < 35; i++) ctrl.tick(16);
+      expect(ctrl.tick(0).phase).toBe("stopping");
+      expect(reels.landReels).toHaveBeenCalledTimes(1);
+      expect(reels.snapReels).not.toHaveBeenCalled();
+
+      // Second press during stopping — should snap remaining reels, not no-op.
+      ctrl.pressButton();
+      expect(reels.snapReels).toHaveBeenCalledTimes(1);
+
+      resolveLand();
+      await flushPromises();
+      expect(ctrl.tick(0).phase).toBe("idle");
+    });
   });
 
   describe("insufficient funds", () => {
@@ -309,6 +349,76 @@ describe("SpinController", () => {
       expect(ctrl.tick(0).canSpin).toBe(true);
       ctrl.setBet(10);
       expect(ctrl.tick(0).canSpin).toBe(false);
+    });
+  });
+
+  describe("anticipation", () => {
+    // A grid where reels 0–2 all land on CHERRY on the top row — a high-paying
+    // 3-of-a-kind prefix that should slow reels 3–4 to telegraph the chase.
+    const antGrid: SpinResponse["grid"] = [
+      ["CHERRY", "LEMON", "LEMON"],
+      ["CHERRY", "LEMON", "LEMON"],
+      ["CHERRY", "LEMON", "LEMON"],
+      ["LEMON", "LEMON", "LEMON"],
+      ["LEMON", "LEMON", "LEMON"],
+    ];
+
+    it("is null on a response with no high-paying prefix", async () => {
+      const flatGrid: SpinResponse["grid"] = [
+        ["LEMON", "DIAMOND", "SEVEN"],
+        ["DIAMOND", "SEVEN", "EMERALD"],
+        ["SEVEN", "EMERALD", "LEMON"],
+        ["EMERALD", "LEMON", "DIAMOND"],
+        ["LEMON", "DIAMOND", "SEVEN"],
+      ];
+      const { ctrl } = setup({
+        serverResult: { ok: true, data: makeResponse({ grid: flatGrid }) },
+      });
+      ctrl.pressButton();
+      await flushPromises();
+      expect(ctrl.tick(0).anticipation).toBeNull();
+    });
+
+    it("populates anticipation.reels when reels 0–2 telegraph a big win", async () => {
+      const { ctrl } = setup({
+        serverResult: {
+          ok: true,
+          data: makeResponse({ grid: antGrid }),
+        },
+      });
+      ctrl.pressButton();
+      await flushPromises();
+      const snap = ctrl.tick(0);
+      expect(snap.anticipation).toEqual({ reels: [3, 4] });
+    });
+
+    it("passes anticipation to landReels", async () => {
+      const { ctrl, reels } = setup({
+        serverResult: {
+          ok: true,
+          data: makeResponse({ grid: antGrid }),
+        },
+      });
+      ctrl.pressButton();
+      await flushPromises();
+      for (let i = 0; i < 35; i++) ctrl.tick(16);
+      expect(reels.landReels).toHaveBeenCalledWith(expect.anything(), {
+        reels: [3, 4],
+      });
+    });
+
+    it("clears anticipation on return to idle", async () => {
+      const { ctrl } = setup({
+        serverResult: {
+          ok: true,
+          data: makeResponse({ grid: antGrid }),
+        },
+      });
+      ctrl.pressButton();
+      await flushPromises();
+      for (let i = 0; i < 35; i++) ctrl.tick(16);
+      await flushPromises();
+      expect(ctrl.tick(0).anticipation).toBeNull();
     });
   });
 });
