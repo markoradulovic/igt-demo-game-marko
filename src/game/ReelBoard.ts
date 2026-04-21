@@ -44,6 +44,16 @@ interface Reel {
   cells: ReelCell[];
   strip: Symbol[];
   settledApplied: boolean;
+  // Tracks whether the per-reel land callback has already fired for the
+  // current spin cycle, so we call it exactly once on the bounce→settled
+  // transition even though the tick loop polls every frame.
+  landNotified: boolean;
+}
+
+export interface ReelBoardOptions {
+  ticker?: Ticker;
+  // Fires once per reel at the moment it settles — drives per-reel land SFX.
+  onReelLanded?: () => void;
 }
 
 export class ReelBoard {
@@ -53,9 +63,11 @@ export class ReelBoard {
   private tickHandler: ((t: Ticker) => void) | null = null;
   private anticipatingReels: Set<number> = new Set();
   private anticipationElapsed = 0;
+  private readonly onReelLanded: (() => void) | undefined;
 
-  constructor(ticker: Ticker = Ticker.shared) {
-    this.ticker = ticker;
+  constructor(options: ReelBoardOptions = {}) {
+    this.ticker = options.ticker ?? Ticker.shared;
+    this.onReelLanded = options.onReelLanded;
     this.view = new Container();
 
     for (let c = 0; c < COLS; c++) {
@@ -92,6 +104,7 @@ export class ReelBoard {
         cells,
         strip: [...SYMBOLS],
         settledApplied: true,
+        landNotified: true,
       };
       this.reels.push(reel);
       // Offset each reel so the idle grid shows a mix of symbols
@@ -103,6 +116,7 @@ export class ReelBoard {
     for (const reel of this.reels) {
       reel.strip = [...SYMBOLS];
       reel.settledApplied = false;
+      reel.landNotified = false;
       reel.animator.start();
     }
     this.startTicking();
@@ -120,6 +134,7 @@ export class ReelBoard {
       const targetPos = response.stops[c] % STRIP_LEN;
       reel.strip = bakeGrid(reel.strip, targetPos, response.grid[c], STRIP_LEN);
       reel.settledApplied = false;
+      reel.landNotified = false;
       reel.animator.quickStop(targetPos);
     }
     this.startTicking();
@@ -221,6 +236,10 @@ export class ReelBoard {
       if (reel.settledApplied) continue;
       reel.animator.tick(deltaMs);
       this.renderReel(reel, reel.animator.position);
+      if (!reel.landNotified && reel.animator.isSettled) {
+        reel.landNotified = true;
+        this.onReelLanded?.();
+      }
     }
     if (this.anticipatingReels.size > 0) {
       this.anticipationElapsed += deltaMs;

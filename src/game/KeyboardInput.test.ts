@@ -71,6 +71,21 @@ describe("attachKeyboardInput", () => {
     expect(handlers.onBetNext).not.toHaveBeenCalled();
   });
 
+  it("routes KeyM to onToggleSound when provided", () => {
+    const target = mockTarget();
+    const handlers = { ...makeHandlers(), onToggleSound: vi.fn() };
+    attachKeyboardInput(target, handlers);
+    target.dispatch("KeyM");
+    expect(handlers.onToggleSound).toHaveBeenCalledTimes(1);
+  });
+
+  it("KeyM is a no-op when onToggleSound is not provided", () => {
+    const target = mockTarget();
+    const handlers = makeHandlers();
+    attachKeyboardInput(target, handlers);
+    expect(() => target.dispatch("KeyM")).not.toThrow();
+  });
+
   it("returns a teardown that removes the listener", () => {
     const target = mockTarget();
     const handlers = makeHandlers();

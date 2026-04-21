@@ -98,6 +98,11 @@ async function init(): Promise<void> {
   }
   bundleAssets["ui-frame"] = `assets/ui/frame.svg`;
   bundleAssets["ui-background"] = `assets/ui/background.svg`;
+  // Audio is deliberately NOT loaded here. Chrome's autoplay policy requires
+  // the AudioContext to be created inside a user gesture; loading audio at
+  // preload time would create the context before any click and log noisy
+  // warnings. Audio is lazy-loaded by AudioManager on the first toggle-on
+  // gesture instead.
   Assets.addBundle("game", bundleAssets);
 
   // Animate the bar smoothly over FILL_MS regardless of how fast assets

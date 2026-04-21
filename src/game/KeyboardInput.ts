@@ -10,6 +10,7 @@ export interface KeyboardHandlers {
   onSpin(): void;
   onBetPrev(): void;
   onBetNext(): void;
+  onToggleSound?(): void;
 }
 
 // A structural subset of EventTarget so callers can pass `window`, a DOM
@@ -55,6 +56,8 @@ export function attachKeyboardInput(
       handlers.onBetPrev();
     } else if (e.code === "ArrowRight") {
       handlers.onBetNext();
+    } else if (e.code === "KeyM") {
+      handlers.onToggleSound?.();
     }
   };
   target.addEventListener("keydown", listener);

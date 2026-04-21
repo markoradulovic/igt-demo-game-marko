@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createSpinController } from "./SpinController";
-import type { SpinController, ReelSink } from "./SpinController";
+import type { SpinController, ReelSink, AudioSink } from "./SpinController";
 import type {
   SlotServer,
   SpinResponse,
@@ -46,6 +46,19 @@ function makeReels(): ReelSink {
   };
 }
 
+function makeAudio() {
+  const sink: AudioSink = {
+    onSpinStart: vi.fn(),
+    onAnticipation: vi.fn(),
+    onWin: vi.fn(),
+  };
+  return sink as AudioSink & {
+    onSpinStart: ReturnType<typeof vi.fn>;
+    onAnticipation: ReturnType<typeof vi.fn>;
+    onWin: ReturnType<typeof vi.fn>;
+  };
+}
+
 function makeServer(result?: SpinResult): SlotServer {
   const defaultResult: SpinResult = {
     ok: true,
@@ -69,13 +82,15 @@ function setup(
 ) {
   const reels = makeReels();
   const server = makeServer(opts.serverResult);
+  const audio = makeAudio();
   const ctrl = createSpinController({
     server,
     reels,
+    audio,
     initialBalance: opts.initialBalance ?? 1000,
     initialBet: opts.initialBet ?? 1,
   });
-  return { ctrl, reels, server };
+  return { ctrl, reels, server, audio };
 }
 
 describe("SpinController", () => {
@@ -419,6 +434,88 @@ describe("SpinController", () => {
       for (let i = 0; i < 35; i++) ctrl.tick(16);
       await flushPromises();
       expect(ctrl.tick(0).anticipation).toBeNull();
+    });
+  });
+
+  describe("audio events", () => {
+    const antGrid: SpinResponse["grid"] = [
+      ["CHERRY", "LEMON", "LEMON"],
+      ["CHERRY", "LEMON", "LEMON"],
+      ["CHERRY", "LEMON", "LEMON"],
+      ["LEMON", "LEMON", "LEMON"],
+      ["LEMON", "LEMON", "LEMON"],
+    ];
+
+    it("fires onSpinStart once per press, immediately on idle → requesting", () => {
+      const { ctrl, audio } = setup();
+      ctrl.pressButton();
+      expect(audio.onSpinStart).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not fire onSpinStart or onWin when the server rejects with insufficient funds", async () => {
+      const { ctrl, audio } = setup({
+        serverResult: { ok: false, error: "INSUFFICIENT_FUNDS", balance: 0 },
+      });
+      ctrl.pressButton();
+      await flushPromises();
+      expect(audio.onSpinStart).toHaveBeenCalledTimes(1);
+      expect(audio.onWin).not.toHaveBeenCalled();
+      expect(audio.onAnticipation).not.toHaveBeenCalled();
+    });
+
+    it("fires onWin only when totalWin > 0", async () => {
+      const { ctrl, audio } = setup({
+        serverResult: {
+          ok: true,
+          data: makeResponse({
+            totalWin: 10,
+            balanceAfter: 1009,
+            lines: [WIN_LINE],
+          }),
+        },
+      });
+      ctrl.pressButton();
+      await flushPromises();
+      for (let i = 0; i < 35; i++) ctrl.tick(16);
+      await flushPromises();
+      expect(audio.onWin).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not fire onWin on a no-win spin", async () => {
+      const { ctrl, audio } = setup();
+      ctrl.pressButton();
+      await flushPromises();
+      for (let i = 0; i < 35; i++) ctrl.tick(16);
+      await flushPromises();
+      expect(audio.onWin).not.toHaveBeenCalled();
+    });
+
+    it("fires onAnticipation once when the grid telegraphs a chase", async () => {
+      const { ctrl, audio } = setup({
+        serverResult: {
+          ok: true,
+          data: makeResponse({ grid: antGrid }),
+        },
+      });
+      ctrl.pressButton();
+      await flushPromises();
+      expect(audio.onAnticipation).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not fire onAnticipation on a flat grid", async () => {
+      const flatGrid: SpinResponse["grid"] = [
+        ["LEMON", "DIAMOND", "SEVEN"],
+        ["DIAMOND", "SEVEN", "EMERALD"],
+        ["SEVEN", "EMERALD", "LEMON"],
+        ["EMERALD", "LEMON", "DIAMOND"],
+        ["LEMON", "DIAMOND", "SEVEN"],
+      ];
+      const { ctrl, audio } = setup({
+        serverResult: { ok: true, data: makeResponse({ grid: flatGrid }) },
+      });
+      ctrl.pressButton();
+      await flushPromises();
+      expect(audio.onAnticipation).not.toHaveBeenCalled();
     });
   });
 });

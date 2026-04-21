@@ -59,11 +59,27 @@ export interface ReelSink {
   clearHighlight(): void;
 }
 
+/** Callbacks the controller fires for phase-driven sound events. Decoupled
+ *  from `AudioManager` so the controller stays pure-TS and tests can pass a
+ *  recording fake. Mirrors the ReelSink pattern above. */
+export interface AudioSink {
+  onSpinStart(): void;
+  onAnticipation(): void;
+  onWin(): void;
+}
+
+const NO_AUDIO: AudioSink = {
+  onSpinStart: () => {},
+  onAnticipation: () => {},
+  onWin: () => {},
+};
+
 export interface SpinControllerDeps {
   server: SlotServer;
   reels: ReelSink;
   initialBalance: number;
   initialBet: number;
+  audio?: AudioSink;
 }
 
 export interface SpinController {
@@ -79,6 +95,7 @@ export function createSpinController(deps: SpinControllerDeps): SpinController {
 class SpinControllerImpl implements SpinController {
   private readonly server: SlotServer;
   private readonly reels: ReelSink;
+  private readonly audio: AudioSink;
   private phase: SpinPhase = "idle";
   private balance: number;
   private bet: number;
@@ -97,6 +114,7 @@ class SpinControllerImpl implements SpinController {
   constructor(deps: SpinControllerDeps) {
     this.server = deps.server;
     this.reels = deps.reels;
+    this.audio = deps.audio ?? NO_AUDIO;
     this.balance = deps.initialBalance;
     this.bet = deps.initialBet;
   }
@@ -192,6 +210,7 @@ class SpinControllerImpl implements SpinController {
     // `phase !== "idle"` gate above, so we never start a parallel spin.
     this.phase = "requesting";
     this.reels.spinReels();
+    this.audio.onSpinStart();
     this.pendingResponse = null;
     this.quickStopRequested = false;
 
@@ -207,6 +226,9 @@ class SpinControllerImpl implements SpinController {
           PAYLINES,
           HIGH_PAYING_SYMBOLS
         );
+        if (this.pendingAnticipation !== null) {
+          this.audio.onAnticipation();
+        }
         this.spinHoldRemaining = MIN_SPIN_MS;
         this.phase = "spinning";
       },
@@ -243,6 +265,7 @@ class SpinControllerImpl implements SpinController {
     // visual cue is done regardless of whether the big win actually paid.
     this.pendingAnticipation = null;
     if (response.totalWin > 0) {
+      this.audio.onWin();
       this.phase = "presenting";
       this.presentingResponse = response;
       this.presentElapsed = 0;

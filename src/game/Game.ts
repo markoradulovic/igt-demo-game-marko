@@ -5,6 +5,8 @@ import { BetSelector } from "./BetSelector";
 import { createSpinController } from "./SpinController";
 import type { SpinController, SpinSnapshot } from "./SpinController";
 import { attachKeyboardInput } from "./KeyboardInput";
+import { createAudioManager } from "./AudioManager";
+import type { AudioManager } from "./AudioManager";
 
 export class Game {
   readonly view: Container;
@@ -18,6 +20,9 @@ export class Game {
   private spinLabel: Text;
   private lastActiveLine: unknown = null;
   private detachKeyboard: (() => void) | null = null;
+  private audio: AudioManager;
+  private soundButton: Container;
+  private soundIcon: Graphics;
 
   constructor(
     server: SlotServer,
@@ -46,7 +51,11 @@ export class Game {
       this.view.addChild(frame);
     }
 
-    this.board = new ReelBoard();
+    this.audio = createAudioManager();
+
+    this.board = new ReelBoard({
+      onReelLanded: () => this.audio.play("reel-land"),
+    });
     this.board.view.x = 140;
     this.board.view.y = 40;
     this.view.addChild(this.board.view);
@@ -73,6 +82,7 @@ export class Game {
     this.view.addChild(this.betSelector.view);
     this.betSelector.onBetChanged((bet) => {
       this.controller.setBet(bet);
+      this.audio.play("click");
       this.applySnapshot(this.controller.tick(0));
     });
 
@@ -94,8 +104,25 @@ export class Game {
     this.spinLabel.y = 36;
     this.spinButton.addChild(this.spinLabel);
 
-    this.spinButton.on("pointertap", () => this.controller.pressButton());
+    this.spinButton.on("pointertap", () => {
+      this.audio.play("click");
+      this.controller.pressButton();
+    });
     this.view.addChild(this.spinButton);
+
+    // Sound toggle — top-right corner, intentionally separated from the
+    // gameplay cluster at the bottom of the stage so the player doesn't
+    // toggle audio by accident while aiming for Spin.
+    this.soundButton = new Container();
+    this.soundButton.x = 1200;
+    this.soundButton.y = 20;
+    this.soundButton.eventMode = "static";
+    this.soundButton.cursor = "pointer";
+    this.soundIcon = new Graphics();
+    this.soundButton.addChild(this.soundIcon);
+    this.soundButton.on("pointertap", () => this.toggleSound());
+    this.drawSoundIcon();
+    this.view.addChild(this.soundButton);
 
     this.controller = createSpinController({
       server,
@@ -110,6 +137,11 @@ export class Game {
         },
         clearHighlight: () => this.board.clearHighlight(),
       },
+      audio: {
+        onSpinStart: () => this.audio.play("spin-start"),
+        onAnticipation: () => this.audio.play("anticipation"),
+        onWin: () => this.audio.play("win"),
+      },
     });
 
     ticker.add((t: Ticker) =>
@@ -119,10 +151,61 @@ export class Game {
 
     if (typeof window !== "undefined") {
       this.detachKeyboard = attachKeyboardInput(window, {
-        onSpin: () => this.controller.pressButton(),
+        onSpin: () => {
+          this.audio.play("click");
+          this.controller.pressButton();
+        },
         onBetPrev: () => this.betSelector.prev(),
         onBetNext: () => this.betSelector.next(),
+        onToggleSound: () => this.toggleSound(),
       });
+    }
+  }
+
+  private toggleSound(): void {
+    const next = !this.audio.isEnabled();
+    this.audio.setEnabled(next);
+    this.drawSoundIcon();
+    // Play the click feedback *after* enabling so the toggle itself is
+    // audible confirmation; when muting, stay silent (a click on disable
+    // would contradict the user's intent).
+    if (next) this.audio.play("click");
+  }
+
+  // Speaker silhouette + optional slash for the muted state. Drawn in pure
+  // Pixi Graphics so the icon stays crisp at any scale and doesn't require
+  // a new sprite asset. Sized at 48×48 with the speaker occupying the left
+  // half and the cone flaring to the right.
+  private drawSoundIcon(): void {
+    const enabled = this.audio.isEnabled();
+    const g = this.soundIcon;
+    g.clear();
+
+    // Rounded square button background
+    g.roundRect(0, 0, 48, 48, 8);
+    g.fill({ color: enabled ? 0x2ecc71 : 0x4a4a5e });
+
+    // Speaker body (rectangle) + cone (triangle) in white
+    g.rect(12, 20, 6, 8);
+    g.moveTo(18, 20);
+    g.lineTo(28, 12);
+    g.lineTo(28, 36);
+    g.lineTo(18, 28);
+    g.lineTo(18, 20);
+    g.fill({ color: 0xffffff });
+
+    if (enabled) {
+      // Sound waves to the right of the cone
+      g.moveTo(32, 18);
+      g.lineTo(36, 22);
+      g.lineTo(36, 26);
+      g.lineTo(32, 30);
+      g.stroke({ width: 2, color: 0xffffff });
+    } else {
+      // Diagonal slash indicating muted
+      g.moveTo(10, 10);
+      g.lineTo(38, 38);
+      g.stroke({ width: 3, color: 0xff6666 });
     }
   }
 

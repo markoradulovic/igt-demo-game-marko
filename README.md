@@ -22,11 +22,13 @@ Open the printed URL. A loading screen fills, then the game enters its idle stat
 - When reels 1–3 all land on the same high-paying symbol (WILD, CHERRY, BELL), reels 4–5 slow and pulse to telegraph the chase for a bigger win.
 - On a win: the total rolls up, then each winning line highlights in turn (gold border on wild substitutions, white on direct matches). Non-winning cells dim so the line reads clearly.
 - Balance updates from the server's `balanceAfter` after every spin.
+- The speaker icon at the top-right of the stage toggles sound. Audio is **off by default on every page load** — click the icon (or press `M`) to opt in.
 
 ### Keyboard shortcuts
 
 - `Space` — spin (or quick-stop during an active spin).
 - `←` / `→` — cycle the bet down / up.
+- `M` — toggle sound on/off.
 
 ## Reproducible spins
 
@@ -47,12 +49,14 @@ Four deep modules behind a thin Pixi view. Following a spin end-to-end means rea
 
 ## Tests
 
-`npm run test` runs 54 tests across five files:
+`npm run test` runs 84 tests across seven files:
 
 - `slotMath.test.ts` — response shape, cross-spin invariants, wild substitution, insufficient-funds.
-- `SpinController.test.ts` — phase lifecycle, quick-stop routing, rollup interpolation, line cycling, server rejection.
+- `SpinController.test.ts` — phase lifecycle, quick-stop routing, rollup interpolation, line cycling, server rejection, anticipation, audio-event dispatch.
 - `ReelAnimator.test.ts` — per-reel easing/bounce state machine under fixed ticks.
-- `reelMath.test.ts` — strip baking, cell wrapping, wild-sub highlight rules.
+- `reelMath.test.ts` — strip baking, cell wrapping, wild-sub highlight rules, anticipation decision.
 - `BetSelector.test.ts` — bet cycling and enable/disable behavior.
+- `KeyboardInput.test.ts` — key routing, repeat suppression, teardown.
+- `AudioManager.test.ts` — disabled-by-default, missing-alias safety, toggle semantics.
 
 No Pixi or DOM harness is needed — the orchestration layer is pure TypeScript.
